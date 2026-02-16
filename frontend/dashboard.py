@@ -234,7 +234,7 @@ def main_page():
                 ui.label().bind_text_from(globals(), 'last_update').classes('text-sm text-slate-600 dark:text-gray-300 font-mono')
             
             # Theme Switch
-            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round text-color=slate-900 dark:text-color=white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
+            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
 
     # 3. Main Content Area
     with ui.column().classes('w-full max-w-7xl mx-auto p-6 mt-4 gap-8'):
@@ -306,41 +306,41 @@ def main_page():
                 with ui.row().classes('justify-center w-full mt-2'):
                     ui.label().bind_text_from(system_stats, 'hdd_total_gb', backward=lambda x: f'/ {x} GB').classes('text-sm text-slate-500 dark:text-slate-400 font-semibold')
     
-    # IoT Devices
-    with ui.row().classes('items-center gap-2 mt-8 mb-2 q-ml-md'):
-         ui.icon('sensors', color='secondary')
-         ui.label('IoT Environment').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
-    
-    # IoT Container - Content Width
-    iot_container = ui.row().classes('w-auto gap-4 p-4')
-    
-    def update_iot_display():
-        iot_container.clear()
-        with iot_container:
-            if not iot_devices:
-                 with ui.card().classes('glass-card p-4 min-w-[200px]'):
-                    ui.label('Looking for devices...').classes('text-slate-500 animate-pulse')
-            else:
-                for device_id, data in iot_devices.items():
-                    with ui.card().classes('glass-card p-4 min-w-[200px] hover:scale-105 transition-transform cursor-pointer'):
-                        with ui.row().classes('items-center gap-3 mb-3'):
-                            ui.icon('wifi', size='xs').classes('text-slate-400 dark:text-slate-300')
-                            with ui.column().classes('gap-0'):
-                                ui.label(device_id.replace('esp32-', '').title()).classes('text-md font-bold text-slate-700 dark:text-slate-200')
-                                ui.label('Active').classes('text-[10px] text-positive uppercase tracking-wide')
-                        
-                        ui.separator().classes('bg-slate-300/50 dark:bg-slate-700/50 mb-3')
-                        
-                        with ui.row().classes('justify-between items-center gap-6'):
-                            with ui.column().classes('items-center gap-1'):
-                                ui.icon('thermostat', size='xs', color='orange')
-                                ui.label(f"{data.get('temperature')}°C").classes('text-lg font-bold text-slate-800 dark:text-white')
+        # IoT Devices
+        with ui.row().classes('items-center gap-2 mt-8 mb-2'):
+             ui.icon('sensors', color='secondary')
+             ui.label('IoT Environment').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
+        
+        # IoT Container - Content Width
+        iot_container = ui.row().classes('w-full gap-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4')
+        
+        def update_iot_display():
+            iot_container.clear()
+            with iot_container:
+                if not iot_devices:
+                     with ui.card().classes('glass-card p-4 min-w-[200px]'):
+                        ui.label('Looking for devices...').classes('text-slate-500 animate-pulse')
+                else:
+                    for device_id, data in iot_devices.items():
+                        with ui.card().classes('glass-card p-4 min-w-[200px] hover:scale-105 transition-transform cursor-pointer'):
+                            with ui.row().classes('items-center gap-3 mb-3'):
+                                ui.icon('wifi', size='xs').classes('text-slate-400 dark:text-slate-300')
+                                with ui.column().classes('gap-0'):
+                                    ui.label(device_id.replace('esp32-', '').title()).classes('text-md font-bold text-slate-700 dark:text-slate-200')
+                                    ui.label('Active').classes('text-[10px] text-positive uppercase tracking-wide')
                             
-                            with ui.column().classes('items-center gap-1'):
-                                ui.icon('water_drop', size='xs', color='blue')
-                                ui.label(f"{data.get('humidity')}%").classes('text-lg font-bold text-slate-800 dark:text-white')
-    
-    ui.timer(2.0, update_iot_display)
+                            ui.separator().classes('bg-slate-300/50 dark:bg-slate-700/50 mb-3')
+                            
+                            with ui.row().classes('justify-between items-center gap-6'):
+                                with ui.column().classes('items-center gap-1'):
+                                    ui.icon('thermostat', size='xs', color='orange')
+                                    ui.label(f"{data.get('temperature')}°C").classes('text-lg font-bold text-slate-800 dark:text-white')
+                                
+                                with ui.column().classes('items-center gap-1'):
+                                    ui.icon('water_drop', size='xs', color='blue')
+                                    ui.label(f"{data.get('humidity')}%").classes('text-lg font-bold text-slate-800 dark:text-white')
+        
+        ui.timer(2.0, update_iot_display)
     
     # AI Insights
     with ui.card().classes('glass-card w-full p-6 mt-4 bg-slate-200/50 dark:bg-slate-800/50 border-l-4 border-slate-300 dark:border-white mx-auto max-w-7xl'):
