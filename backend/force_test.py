@@ -3,11 +3,14 @@ import google.generativeai as genai
 
 import os
 
-
+from dotenv import load_dotenv
 
 # PASTE YOUR KEY HERE MANUALLY ONE LAST TIME
 
-KEY = "AIzaSyCHizHPKchUu2U_a_qia2Zqm7Bq6XiJcVg"
+env_path = "/mnt/nvme/Projects/dashboard/.env" 
+load_dotenv(env_path)
+
+KEY = os.getenv("GEMINI_API_KEY") 
 
 
 
