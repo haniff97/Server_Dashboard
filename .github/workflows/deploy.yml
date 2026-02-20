@@ -6,16 +6,11 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - name: Deploy to server
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            cd /mnt/nvme/Projects/dashboard
-            git pull
-            pm2 restart all
-            echo "Deployed successfully!"
+      - name: Pull latest code
+        run: |
+          cd /mnt/nvme/Projects/dashboard
+          git pull
+          sudo pm2 restart all
+          echo "Deployed successfully!"
