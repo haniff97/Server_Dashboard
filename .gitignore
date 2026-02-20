@@ -32,3 +32,4 @@ venv/
 .DS_Store
 Thumbs.db
 gemini_cache.txt
+actions-runner/
