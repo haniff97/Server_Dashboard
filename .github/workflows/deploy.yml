@@ -1,0 +1,21 @@
+name: Deploy to Orange Pi
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /mnt/nvme/Projects/dashboard
+            git pull
+            pm2 restart all
+            echo "Deployed successfully!"
