@@ -346,31 +346,26 @@ def main_page():
     ui.colors(primary='#3b82f6', secondary='#8b5cf6', accent='#ec4899',
               positive='#10b981', warning='#f59e0b')
 
-    with ui.header().classes('glass-header items-center justify-between p-4 fixed top-0 w-full z-50'):
-        with ui.row().classes('items-center gap-3 z-10'):
+    with ui.header().classes('glass-header items-center justify-between p-4 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
+        with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto justify-center sm:justify-start mb-2 sm:mb-0'):
             ui.icon('dashboard', size='md', color='primary')
             ui.label('HOMELAB').classes('text-2xl font-bold tracking-tight text-slate-900 dark:text-white')
-        ui.toggle(['Server', 'Energy'], value='Server',
-                  on_change=lambda e: ui.navigate.to('/energy') if e.value == 'Energy' else None
-                  ).props('unelevated').classes(
-                      'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'
-                  ).style('border-radius:5px;overflow:hidden;')
-        with ui.row().classes('items-center justify-end gap-4 z-10'):
+        
+        with ui.row().classes('items-center justify-center sm:justify-end gap-4 z-10 w-full sm:w-auto mb-2 sm:mb-0'):
             with ui.row().classes('items-center gap-2 bg-slate-200 dark:bg-slate-800 rounded-full px-3 py-1'):
                 ui.icon('schedule', size='xs', color='gray-400')
-                ui.label().bind_text_from(globals(), 'last_update').classes(
-                    'text-sm text-slate-600 dark:text-gray-300 font-mono')
-            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes(
-                'text-slate-900 dark:text-white').bind_icon_from(
-                dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
+                ui.label().bind_text_from(globals(), 'last_update').classes('text-sm text-slate-600 dark:text-gray-300 font-mono')
+            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
 
-    with ui.column().classes('w-full max-w-7xl mx-auto p-6 mt-4 gap-8'):
+    with ui.column().classes('w-full max-w-7xl mx-auto p-6 mt-0 gap-8'):
+        with ui.row().classes('w-full flex justify-center mt-2'):
+            ui.toggle(['Server', 'Energy'], value='Server', on_change=lambda e: ui.navigate.to('/energy') if e.value == 'Energy' else None).props('unelevated text-color=slate-700 dark:text-color=white').classes('bg-slate-200 dark:bg-slate-800').style('border-radius: 10px; overflow: hidden;')
 
         with ui.row().classes('items-center gap-2 mb-2'):
             ui.icon('analytics', color='primary')
             ui.label('System Performance').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
 
-        with ui.grid().classes('w-full gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4'):
+        with ui.grid().classes('w-full gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-start'):
 
             with ui.card().classes('glass-card p-5 flex flex-col items-center relative overflow-hidden'):
                 ui.label('CPU Load').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
@@ -565,32 +560,30 @@ def energy_page():
     hours     = [f"{str(i).zfill(2)}:00" for i in range(24)]
     peak_watt = [0.0]
 
-    with ui.header().classes('glass-header items-center justify-between p-4 fixed top-0 w-full z-50'):
-        with ui.row().classes('items-center gap-3 z-10'):
+    with ui.header().classes('glass-header items-center justify-between p-4 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
+        with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto justify-center sm:justify-start mb-2 sm:mb-0'):
             ui.icon('bolt', size='md', color='warning')
-            ui.label('Energy').classes('text-2xl font-bold tracking-tight text-white')
-        ui.toggle(['Server', 'Energy'], value='Energy',
-                  on_change=lambda e: ui.navigate.to('/') if e.value == 'Server' else None
-                  ).props('unelevated').classes(
-                      'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'
-                  ).style('border-radius:5px;overflow:hidden;')
-        with ui.row().classes('items-center justify-end gap-4 z-10'):
-            ui.label('TNB Tiered Tariff').classes(
-                'text-xs text-slate-500 bg-slate-800 px-3 py-1 rounded-full')
+            ui.label('Energy').classes('text-2xl font-bold tracking-tight text-slate-900 dark:text-white')
+            
+        with ui.row().classes('items-center justify-center sm:justify-end gap-4 z-10 w-full sm:w-auto mb-2 sm:mb-0'):
+            ui.label('TNB Tariff Rate').classes('text-xs text-slate-500 bg-slate-800 px-3 py-1 rounded-full')
+            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
 
-    with ui.column().classes('w-full max-w-7xl mx-auto p-6 mt-6 gap-6'):
+    with ui.column().classes('w-full max-w-7xl mx-auto p-6 mt-0 gap-6'):
+        with ui.row().classes('w-full flex justify-center mt-2 mb-2'):
+            ui.toggle(['Server', 'Energy'], value='Energy', on_change=lambda e: ui.navigate.to('/') if e.value == 'Server' else None).props('unelevated text-color=slate-700 dark:text-color=white').classes('bg-slate-200 dark:bg-slate-800').style('border-radius: 5px; overflow: hidden;')
 
-        with ui.row().classes('w-full gap-6 items-stretch'):
+        with ui.row().classes('w-full gap-6 items-start grid grid-cols-1 md:grid-cols-3'):
 
-            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center flex-1'):
+            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center w-full'):
                 ui.label('Current Power Draw').classes('text-sm font-bold text-slate-400 mb-2 uppercase')
                 gauge = ui.echart({
                     'series': [{
                         'type': 'gauge', 'startAngle': 180, 'endAngle': 0,
                         'min': 0, 'max': 5, 'splitNumber': 5,
                         'radius': '100%', 'center': ['50%', '80%'],
-                        'axisLine': {'lineStyle': {'width': 20,
-                            'color': [[0.3, '#3b82f6'], [0.7, '#10b981'], [1, '#ef4444']]}},
+                        'axisLine': {'lineStyle': {'width': 20, 'color': [[1, 'rgba(255,255,255,0.1)']]}},
+                        'progress': {'show': True, 'width': 20, 'itemStyle': {'color': 'auto'}},
                         'pointer':   {'show': False},
                         'axisTick':  {'show': False},
                         'splitLine': {'show': False},
@@ -598,7 +591,7 @@ def energy_page():
                         'title':     {'show': False},
                         'detail': {
                             'valueAnimation': True,
-                            'formatter': '{value:.3f} kW',
+                            'formatter': '{value} kW',
                             'color': 'white', 'fontSize': 32, 'fontWeight': 'bold',
                             'offsetCenter': [0, '-20%'],
                         },
@@ -714,6 +707,11 @@ def energy_page():
             t3   = min(max(today_kwh - d1 - d2, 0), d3) * 0.516
             cost = t1 + t2 + t3
 
+            gauge.options['series'][0]['progress']['itemStyle']['color'] = (
+                '#3b82f6' if pwr_kw < 1.5 else '#10b981' if pwr_kw < 3.5 else '#ef4444'
+            )
+            gauge.options['series'][0]['detail']['color'] = 'white' if dark_mode.value else '#0f172a'
+            gauge.options['series'][0]['axisLine']['lineStyle']['color'] = [[1, 'rgba(255,255,255,0.1)' if dark_mode.value else 'rgba(0,0,0,0.1)']]
             gauge.options['series'][0]['data'][0]['value'] = round(pwr_kw, 3)
             gauge.update()
             total_kwh_label.set_text(f"{today_kwh:.3f}")
