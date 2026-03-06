@@ -413,8 +413,9 @@ def main_page():
         tuya_refs: dict = {}
 
         def update_iot_display():
+            if tuya_refs.get("initialized"):
+                return
             iot_container.clear()
-            tuya_refs.clear()
             with iot_container:
                 if iot_devices:
                     for device_id, data in iot_devices.items():
@@ -504,6 +505,8 @@ def main_page():
                     tuya_refs["toggle"] = ui.button(
                         "● ON" if on else "○ OFF", on_click=_do_toggle
                     ).classes(f"{'plug-toggle-on' if on else 'plug-toggle-off'} w-full").props("dense")
+                    
+                tuya_refs["initialized"] = True
 
         ui.timer(2.0, update_iot_display)
 
@@ -703,11 +706,15 @@ def energy_page():
             t3   = min(max(today_kwh - d1 - d2, 0), d3) * 0.516
             cost = t1 + t2 + t3
 
-            gauge.options['series'][0]['progress']['itemStyle']['color'] = (
-                '#3b82f6' if pwr_kw < 1.5 else '#10b981' if pwr_kw < 3.5 else '#ef4444'
-            )
-            gauge.options['series'][0]['detail']['color'] = 'white' if dark_mode.value else '#0f172a'
-            gauge.options['series'][0]['axisLine']['lineStyle']['color'] = [[1, 'rgba(255,255,255,0.1)' if dark_mode.value else 'rgba(0,0,0,0.1)']]
+            if 'progress' in gauge.options['series'][0] and 'itemStyle' in gauge.options['series'][0]['progress']:
+                gauge.options['series'][0]['progress']['itemStyle']['color'] = (
+                    '#3b82f6' if pwr_kw < 1.5 else '#10b981' if pwr_kw < 3.5 else '#ef4444'
+                )
+            if 'detail' in gauge.options['series'][0]:
+                gauge.options['series'][0]['detail']['color'] = 'white' if dark_mode.value else '#0f172a'
+            if 'axisLine' in gauge.options['series'][0] and 'lineStyle' in gauge.options['series'][0]['axisLine']:
+                gauge.options['series'][0]['axisLine']['lineStyle']['color'] = [[1, 'rgba(255,255,255,0.1)' if dark_mode.value else 'rgba(0,0,0,0.1)']]
+                
             gauge.options['series'][0]['data'][0]['value'] = round(pwr_kw, 3)
             gauge.update()
             total_kwh_label.set_text(f"{today_kwh:.3f}")
