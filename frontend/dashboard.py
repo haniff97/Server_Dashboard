@@ -15,7 +15,6 @@ import time
 from collections import deque
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from dotenv import load_dotenv
 
 import requests
 from nicegui import ui, app
@@ -29,9 +28,6 @@ prom = PrometheusConnect(url="http://localhost:9090", disable_ssl=True)
 # ─────────────────────────────────────────────────────────────────────────────
 #  TUYA CREDENTIALS  — loaded from .env via PM2
 # ─────────────────────────────────────────────────────────────────────────────
-env_path = "/mnt/nvme/Projects/dashboard/.env" 
-load_dotenv(env_path)
-
 TUYA_CLIENT_ID     = os.getenv("TUYA_CLIENT_ID", "").strip().strip('"').strip("'")
 TUYA_CLIENT_SECRET = os.getenv("TUYA_CLIENT_SECRET", "").strip().strip('"').strip("'")
 TUYA_DEVICE_ID     = os.getenv("TUYA_DEVICE_ID", "").strip().strip('"').strip("'")
@@ -365,7 +361,7 @@ def main_page():
             ui.icon('analytics', color='primary')
             ui.label('System Performance').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
 
-        with ui.grid().classes('w-full gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-start'):
+        with ui.grid().classes('w-full gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4'):
 
             with ui.card().classes('glass-card p-5 flex flex-col items-center relative overflow-hidden'):
                 ui.label('CPU Load').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
@@ -573,9 +569,9 @@ def energy_page():
         with ui.row().classes('w-full flex justify-center mt-2 mb-2'):
             ui.toggle(['Server', 'Energy'], value='Energy', on_change=lambda e: ui.navigate.to('/') if e.value == 'Server' else None).props('unelevated text-color=slate-700 dark:text-color=white').classes('bg-slate-200 dark:bg-slate-800').style('border-radius: 5px; overflow: hidden;')
 
-        with ui.row().classes('w-full gap-6 items-start grid grid-cols-1 md:grid-cols-3'):
+        with ui.row().classes('w-full gap-6 items-stretch'):
 
-            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center w-full'):
+            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center flex-1'):
                 ui.label('Current Power Draw').classes('text-sm font-bold text-slate-400 mb-2 uppercase')
                 gauge = ui.echart({
                     'series': [{
