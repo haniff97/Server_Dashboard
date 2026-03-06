@@ -358,7 +358,7 @@ def main_page():
                 ui.label().bind_text_from(globals(), 'last_update').classes('text-sm text-slate-600 dark:text-gray-300 font-mono')
             ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
 
-    with ui.column().classes('w-full max-w-7xl mx-auto p-6 mt-0 gap-8'):
+    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-0 gap-4 sm:gap-8'):
         with ui.row().classes('w-full flex justify-center mt-2'):
             ui.toggle(['Server', 'Energy'], value='Server', on_change=lambda e: ui.navigate.to('/energy') if e.value == 'Energy' else None).props('unelevated text-color=slate-700 dark:text-color=white').classes('bg-slate-200 dark:bg-slate-800').style('border-radius: 10px; overflow: hidden;')
 
@@ -366,7 +366,7 @@ def main_page():
             ui.icon('analytics', color='primary')
             ui.label('System Performance').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
 
-        with ui.grid().classes('w-full gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4'):
+        with ui.grid().classes('w-full gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4'):
 
             with ui.card().classes('glass-card p-5 flex flex-col items-center relative overflow-hidden'):
                 ui.label('CPU Load').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
@@ -414,7 +414,7 @@ def main_page():
             ui.label('IoT Environment').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
 
         iot_container = ui.row().classes(
-            'w-full gap-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-stretch')
+            'w-full gap-4 sm:gap-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-stretch')
         tuya_refs: dict = {}
 
         def update_iot_display():
@@ -538,7 +538,7 @@ def main_page():
         ui.timer(1.0, _update_tuya_labels)
 
         with ui.card().classes(
-            'glass-card w-full p-6 mt-4 bg-slate-200/50 dark:bg-slate-800/50 '
+            'glass-card w-full p-4 sm:p-6 mt-2 sm:mt-4 bg-slate-200/50 dark:bg-slate-800/50 '
             'border-l-4 border-slate-300 dark:border-white'):
             with ui.row().classes('items-start gap-4'):
                 with ui.column().classes('w-full'):
@@ -570,13 +570,13 @@ def energy_page():
             ui.label('TNB Tariff Rate').classes('text-xs text-slate-500 bg-slate-800 px-3 py-1 rounded-full')
             ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
 
-    with ui.column().classes('w-full max-w-7xl mx-auto p-6 mt-0 gap-6'):
+    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-0 gap-4 sm:gap-6'):
         with ui.row().classes('w-full flex justify-center mt-2 mb-2'):
             ui.toggle(['Server', 'Energy'], value='Energy', on_change=lambda e: ui.navigate.to('/') if e.value == 'Server' else None).props('unelevated text-color=slate-700 dark:text-color=white').classes('bg-slate-200 dark:bg-slate-800').style('border-radius: 5px; overflow: hidden;')
 
-        with ui.row().classes('w-full gap-6 items-stretch'):
+        with ui.row().classes('w-full gap-4 sm:gap-6 items-stretch flex-col lg:flex-row'):
 
-            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center flex-1'):
+            with ui.card().classes('glass-card p-4 sm:p-6 flex flex-col items-center justify-center flex-1 w-full'):
                 ui.label('Current Power Draw').classes('text-sm font-bold text-slate-400 mb-2 uppercase')
                 gauge = ui.echart({
                     'series': [{
@@ -600,7 +600,7 @@ def energy_page():
                     }]
                 }).classes('w-full h-[200px]')
 
-            with ui.column().classes('flex flex-col gap-4 flex-1 justify-center'):
+            with ui.column().classes('flex flex-col gap-4 flex-1 justify-center w-full'):
 
                 with ui.card().classes('glass-card p-4 w-full flex flex-row items-center justify-between'):
                     with ui.column():
@@ -626,7 +626,7 @@ def energy_page():
                         ui.label('RM').classes('text-xs text-slate-400 font-bold')
                         cost_label = ui.label('0.0000').classes('stat-value text-accent')
 
-            with ui.card().classes('glass-card p-6 flex flex-col gap-4 w-[300px]'):
+            with ui.card().classes('glass-card p-4 sm:p-6 flex flex-col gap-4 w-full lg:w-[300px]'):
                 ui.label('Controls').classes('text-sm font-bold text-slate-400 uppercase')
 
                 def filter_devices(e):
@@ -659,7 +659,7 @@ def energy_page():
                 ui.toggle(['Daily', 'Weekly', 'Monthly'], value='Daily',
                           on_change=change_timeframe).classes('w-full')
 
-        with ui.card().classes('glass-card p-6 w-full'):
+        with ui.card().classes('glass-card p-4 sm:p-6 w-full'):
             ui.label('Hourly Power Usage — Smart Plug').classes(
                 'text-sm font-bold text-slate-400 uppercase mb-4')
             area_chart = ui.echart({
@@ -676,7 +676,7 @@ def energy_page():
                              'itemStyle': {'color': '#3b82f6'}, 'data': list(plug_data)}],
             }).classes('w-full h-[300px]')
 
-        with ui.card().classes('glass-card p-6 w-full'):
+        with ui.card().classes('glass-card p-4 sm:p-6 w-full'):
             ui.label('Device Power Draw Trends').classes(
                 'text-sm font-bold text-slate-400 uppercase mb-4')
             line_chart = ui.echart({
