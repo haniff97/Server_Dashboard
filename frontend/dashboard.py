@@ -621,7 +621,7 @@ def energy_page():
                 with ui.card().classes('glass-card p-4 w-full flex flex-row items-center justify-between'):
                     with ui.column():
                         ui.label('EST. TODAY COST').classes('stat-label')
-                        ui.label('TNB Tiered Tariff (daily share)').classes('text-[10px] text-slate-500')
+                        ui.label('July 2025 TNB Tariff (est. share)').classes('text-[10px] text-slate-500')
                     with ui.row().classes('items-baseline gap-1'):
                         ui.label('RM').classes('text-xs text-slate-400 font-bold')
                         cost_label = ui.label('0.0000').classes('stat-value text-accent')
@@ -692,6 +692,41 @@ def energy_page():
                              'itemStyle': {'color': '#3b82f6'}, 'data': list(plug_data)}],
             }).classes('w-full h-[350px]')
 
+        def calculate_tnb_bill(cumulative_monthly_kwh):
+            if cumulative_monthly_kwh <= 0:
+                return 0.0
+            
+            # 1. Calculate Base Charge (RM 0.4443 for first 1500 kWh, RM 0.5443 after)
+            if cumulative_monthly_kwh <= 1500:
+                base_cost = cumulative_monthly_kwh * 0.4443
+            else:
+                base_cost = (1500 * 0.4443) + ((cumulative_monthly_kwh - 1500) * 0.5443)
+                
+            # 2. Calculate Energy Efficiency Incentive (EEI) Rebates
+            rebate_tiers = [
+                (200, 0.250), (250, 0.245), (300, 0.225), (350, 0.210),
+                (400, 0.170), (450, 0.145), (500, 0.120), (550, 0.105),
+                (600, 0.090), (650, 0.075), (700, 0.055), (750, 0.045),
+                (800, 0.040), (850, 0.025), (900, 0.010), (1000, 0.005)
+            ]
+            
+            total_rebate = 0.0
+            kwh_accounted_for = 0
+            
+            for tier_max, rebate_rate in rebate_tiers:
+                if cumulative_monthly_kwh > kwh_accounted_for:
+                    kwh_in_this_tier = min(cumulative_monthly_kwh, tier_max) - kwh_accounted_for
+                    total_rebate += kwh_in_this_tier * rebate_rate
+                    kwh_accounted_for = tier_max
+                else:
+                    break
+                    
+            # 3. Apply Retail Charge Waiver
+            retail_charge = 10.00 if cumulative_monthly_kwh > 600 else 0.0
+            
+            # 4. Calculate Final Cost (no rounding to preserve precision for daily shares)
+            return base_cost - total_rebate + retail_charge
+
         def update_energy_stats():
             with tuya_lock:
                 pwr_raw   = tuya_status.get('cur_power', 0)
@@ -700,13 +735,14 @@ def energy_page():
             pwr_kw    = pwr_raw   / 10.0 / 1000.0
             today_kwh = today_raw / 1000.0
 
-            d1 = 200 / 30
-            d2 = 100 / 30
-            d3 = 300 / 30
-            t1   = min(today_kwh, d1) * 0.218
-            t2   = min(max(today_kwh - d1, 0), d2) * 0.334
-            t3   = min(max(today_kwh - d1 - d2, 0), d3) * 0.516
-            cost = t1 + t2 + t3
+            # Estimate total month kWh assuming constant daily usage for the 30 days
+            total_month_kwh = today_kwh * 30.0
+            
+            total_month_cost = calculate_tnb_bill(total_month_kwh)
+            cost_before_today = calculate_tnb_bill(max(0, total_month_kwh - today_kwh))
+            
+            # The true cost of TODAY's usage, accounting for exactly which tier you are currently in:
+            cost = total_month_cost - cost_before_today
 
             gauge.options['series'][0]['progress']['itemStyle']['color'] = (
                 '#3b82f6' if pwr_kw < 1.5 else '#10b981' if pwr_kw < 3.5 else '#ef4444'
