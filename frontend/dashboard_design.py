@@ -374,6 +374,7 @@ def energy_page():
 
     hours     = [f"{str(i).zfill(2)}:00" for i in range(24)]
     peak_watt = [0.0]
+    timeframe = {'value': 'Daily'}
 
     with ui.header().classes('glass-header items-center justify-between p-4 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
         with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto justify-center sm:justify-start mb-2 sm:mb-0'):
@@ -384,15 +385,13 @@ def energy_page():
             ui.label('TNB Tariff Rate').classes('text-xs text-slate-500 bg-slate-800 px-3 py-1 rounded-full')
             ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
 
-    with ui.column().classes('w-full max-w-7xl mx-auto p-6 mt-0 gap-6'):
+    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-0 gap-4 sm:gap-6'):
         with ui.row().classes('w-full flex justify-center mt-2 mb-2'):
             ui.toggle(['Server', 'Energy'], value='Energy', on_change=lambda e: ui.navigate.to('/') if e.value == 'Server' else None).props('unelevated text-color=slate-700 dark:text-color=white').classes('bg-slate-200 dark:bg-slate-800').style('border-radius: 5px; overflow: hidden;')
-        
-        # --- Top Control Panel ---
-        with ui.row().classes('w-full gap-6 items-start grid grid-cols-1 md:grid-cols-3'):
-            
-            # Gauge Card
-            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center w-full'):
+
+        with ui.row().classes('w-full gap-4 sm:gap-6 items-stretch flex-col lg:flex-row'):
+
+            with ui.card().classes('glass-card p-4 sm:p-6 flex flex-col items-center justify-center flex-1 w-full'):
                 ui.label('Current Power Draw').classes('text-sm font-bold text-slate-400 mb-2 uppercase')
                 gauge = ui.echart({
                     'series': [{
@@ -416,7 +415,7 @@ def energy_page():
                     }]
                 }).classes('w-full h-[200px]')
 
-            with ui.column().classes('flex flex-col gap-4 flex-1 justify-center'):
+            with ui.column().classes('flex flex-col gap-4 flex-1 justify-center w-full'):
 
                 with ui.card().classes('glass-card p-4 w-full flex flex-row items-center justify-between'):
                     with ui.column():
@@ -437,53 +436,33 @@ def energy_page():
                 with ui.card().classes('glass-card p-4 w-full flex flex-row items-center justify-between'):
                     with ui.column():
                         ui.label('EST. TODAY COST').classes('stat-label')
-                        ui.label('TNB Tiered Tariff (daily share)').classes('text-[10px] text-slate-500')
+                        ui.label('July 2025 TNB Tariff (est. share)').classes('text-[10px] text-slate-500')
                     with ui.row().classes('items-baseline gap-1'):
                         ui.label('RM').classes('text-xs text-slate-400 font-bold')
                         cost_label = ui.label('0.0000').classes('stat-value text-accent')
 
-            with ui.card().classes('glass-card p-6 flex flex-col gap-4 w-full sm:w-[300px] h-full'):
+            with ui.card().classes('glass-card p-4 sm:p-6 flex flex-col gap-4 w-full lg:w-[300px]'):
                 ui.label('Controls').classes('text-sm font-bold text-slate-400 uppercase')
 
-                def filter_devices(e):
-                    data = list(plug_data) if e.value in ('All Devices', 'Smart Plug') else [0] * 24
-                    area_chart.options['series'][0]['data'] = data
-                    line_chart.options['series'][0]['data'] = data
-                    area_chart.update()
-                    line_chart.update()
-
                 ui.select(['All Devices', 'Smart Plug'], value='All Devices',
-                          label='Device Selector', on_change=filter_devices).classes('w-full')
+                          label='Device Selector').classes('w-full')
 
                 def change_timeframe(e):
-                    if e.value == 'Monthly':
-                        lbl  = [f"Day {i+1}" for i in range(30)]
-                        data = [0.0] * 30
-                    elif e.value == 'Weekly':
-                        lbl  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                        data = [0.0] * 7
-                    else:
-                        lbl  = hours
-                        data = list(plug_data)
-                    area_chart.options['xAxis'][0]['data']  = lbl
-                    area_chart.options['series'][0]['data'] = data
-                    area_chart.update()
-                    line_chart.options['xAxis']['data']     = lbl
-                    line_chart.options['series'][0]['data'] = data
-                    line_chart.update()
+                    timeframe['value'] = e.value
+                    refresh_charts()
 
                 ui.toggle(['Daily', 'Weekly', 'Monthly'], value='Daily',
                           on_change=change_timeframe).classes('w-full')
 
-        with ui.card().classes('glass-card p-6 w-full'):
-            ui.label('Hourly Power Usage — Smart Plug').classes(
+        with ui.card().classes('glass-card p-4 sm:p-6 w-full'):
+            ui.label('Power Usage — Smart Plug').classes(
                 'text-sm font-bold text-slate-400 uppercase mb-4')
             area_chart = ui.echart({
                 'tooltip': {'trigger': 'axis'},
                 'legend':  {'data': ['Smart Plug'], 'textStyle': {'color': '#94a3b8'}, 'top': 0, 'right': 0},
                 'grid':    {'left': '3%', 'right': '4%', 'bottom': '3%', 'containLabel': True},
                 'xAxis':   [{'type': 'category', 'boundaryGap': False, 'data': hours,
-                             'axisLabel': {'color': '#94a3b8'}}],
+                             'axisLabel': {'color': '#94a3b8', 'rotate': 45}}],
                 'yAxis':   [{'type': 'value', 'name': 'Power (kW)',
                              'nameTextStyle': {'color': '#94a3b8'},
                              'axisLabel': {'color': '#94a3b8'}}],
@@ -492,21 +471,67 @@ def energy_page():
                              'itemStyle': {'color': '#3b82f6'}, 'data': list(plug_data)}],
             }).classes('w-full h-[300px]')
 
-        with ui.card().classes('glass-card p-6 w-full'):
-            ui.label('Device Power Draw Trends').classes(
+        with ui.card().classes('glass-card p-4 sm:p-6 w-full'):
+            ui.label('Power Draw Trends').classes(
                 'text-sm font-bold text-slate-400 uppercase mb-4')
             line_chart = ui.echart({
                 'tooltip': {'trigger': 'axis'},
                 'legend':  {'data': ['Smart Plug'], 'textStyle': {'color': '#94a3b8'}, 'top': 0, 'right': 0},
                 'grid':    {'left': '3%', 'right': '4%', 'bottom': '3%', 'containLabel': True},
                 'xAxis':   {'type': 'category', 'boundaryGap': False, 'data': hours,
-                            'axisLabel': {'color': '#94a3b8'}},
+                            'axisLabel': {'color': '#94a3b8', 'rotate': 45}},
                 'yAxis':   {'type': 'value', 'name': 'Power (kW)',
-                            'nameTextStyle': {'color': '#94a3b8'},
-                            'axisLabel': {'color': '#94a3b8'}},
+                             'nameTextStyle': {'color': '#94a3b8'},
+                             'axisLabel': {'color': '#94a3b8'}},
                 'series':  [{'name': 'Smart Plug', 'type': 'line', 'smooth': True,
                              'itemStyle': {'color': '#3b82f6'}, 'data': list(plug_data)}],
             }).classes('w-full h-[350px]')
+
+        def _mock_query_prom_range(duration: str):
+            """Mock Prometheus historical data for testing charts dynamically!"""
+            if duration == 'Daily':
+                return hours, list(plug_data)
+            elif duration == 'Weekly':
+                return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], [random.uniform(2.0,5.0) for _ in range(7)]
+            else:  # Monthly
+                return [f"Day {i+1}" for i in range(30)], [random.uniform(1.5,4.5) for _ in range(30)]
+
+        def refresh_charts():
+            tf = timeframe['value']
+            labels, data = _mock_query_prom_range(tf)
+
+            area_chart.options['xAxis'][0]['data']  = labels
+            area_chart.options['series'][0]['data'] = data
+            area_chart.update()
+            
+            line_chart.options['xAxis']['data']     = labels
+            line_chart.options['series'][0]['data'] = data
+            line_chart.update()
+
+        def calculate_tnb_bill(cumulative_monthly_kwh):
+            if cumulative_monthly_kwh <= 0:
+                return 0.0
+            if cumulative_monthly_kwh <= 1500:
+                base_cost = cumulative_monthly_kwh * 0.4443
+            else:
+                base_cost = (1500 * 0.4443) + ((cumulative_monthly_kwh - 1500) * 0.5443)
+            rebate_tiers = [
+                (200, 0.250), (250, 0.245), (300, 0.225), (350, 0.210),
+                (400, 0.170), (450, 0.145), (500, 0.120), (550, 0.105),
+                (600, 0.090), (650, 0.075), (700, 0.055), (750, 0.045),
+                (800, 0.040), (850, 0.025), (900, 0.010), (1000, 0.005)
+            ]
+            total_rebate      = 0.0
+            kwh_accounted_for = 0
+            for tier_max, rebate_rate in rebate_tiers:
+                if cumulative_monthly_kwh > kwh_accounted_for:
+                    kwh_in_this_tier  = min(cumulative_monthly_kwh, tier_max) - kwh_accounted_for
+                    total_rebate     += kwh_in_this_tier * rebate_rate
+                    kwh_accounted_for = tier_max
+                else:
+                    break
+            retail_charge = 10.00 if cumulative_monthly_kwh > 600 else 0.0
+            return base_cost - total_rebate + retail_charge
 
         def update_energy_stats():
             with tuya_lock:
@@ -516,19 +541,19 @@ def energy_page():
             pwr_kw    = pwr_raw   / 10.0 / 1000.0
             today_kwh = today_raw / 1000.0
 
-            d1 = 200 / 30
-            d2 = 100 / 30
-            d3 = 300 / 30
-            t1   = min(today_kwh, d1) * 0.218
-            t2   = min(max(today_kwh - d1, 0), d2) * 0.334
-            t3   = min(max(today_kwh - d1 - d2, 0), d3) * 0.516
-            cost = t1 + t2 + t3
+            total_month_kwh  = today_kwh * 30.0
+            total_month_cost = calculate_tnb_bill(total_month_kwh)
+            cost_before      = calculate_tnb_bill(max(0, total_month_kwh - today_kwh))
+            cost             = total_month_cost - cost_before
 
-            gauge.options['series'][0]['progress']['itemStyle']['color'] = (
-                '#3b82f6' if pwr_kw < 1.5 else '#10b981' if pwr_kw < 3.5 else '#ef4444'
-            )
-            gauge.options['series'][0]['detail']['color'] = 'white' if dark_mode.value else '#0f172a'
-            gauge.options['series'][0]['axisLine']['lineStyle']['color'] = [[1, 'rgba(255,255,255,0.1)' if dark_mode.value else 'rgba(0,0,0,0.1)']]
+            try:
+                gauge.options['series'][0]['progress']['itemStyle']['color'] = (
+                    '#3b82f6' if pwr_kw < 1.5 else '#10b981' if pwr_kw < 3.5 else '#ef4444')
+                gauge.options['series'][0]['detail']['color'] = 'white' if dark_mode.value else '#0f172a'
+                gauge.options['series'][0]['axisLine']['lineStyle']['color'] = [
+                    [1, 'rgba(255,255,255,0.1)' if dark_mode.value else 'rgba(0,0,0,0.1)']]
+            except (KeyError, TypeError):
+                pass
             gauge.options['series'][0]['data'][0]['value'] = round(pwr_kw, 3)
             gauge.update()
             total_kwh_label.set_text(f"{today_kwh:.3f}")
@@ -538,11 +563,7 @@ def energy_page():
                 peak_watt[0] = pwr_kw
                 peak_usage_label.set_text(f"{pwr_kw:.3f}")
 
-            data_snap = list(plug_data)
-            area_chart.options['series'][0]['data'] = data_snap
-            area_chart.update()
-            line_chart.options['series'][0]['data'] = data_snap
-            line_chart.update()
+            refresh_charts()
 
         ui.timer(2.0, update_energy_stats)
 
