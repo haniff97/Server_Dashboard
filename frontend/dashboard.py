@@ -13,7 +13,7 @@ import subprocess
 import threading
 import time
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 
@@ -575,7 +575,7 @@ def energy_page():
 
     hours     = [f"{str(i).zfill(2)}:00" for i in range(24)]
     peak_watt = [0.0]
-    timeframe = {'value': 'Live'}
+    timeframe = {'value': 'Daily'}
 
     with ui.header().classes('glass-header items-center justify-between p-4 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
         with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto justify-center sm:justify-start mb-2 sm:mb-0'):
@@ -583,11 +583,7 @@ def energy_page():
             ui.label('Energy').classes('text-2xl font-bold tracking-tight text-slate-900 dark:text-white')
             
         with ui.row().classes('items-center justify-center sm:justify-end gap-4 z-10 w-full sm:w-auto mb-2 sm:mb-0'):
-            with ui.row().classes('items-center gap-2 bg-slate-200 dark:bg-slate-800 rounded-full px-3 py-1'):
-                ui.icon('schedule', size='xs', color='gray-400')
-                rt_clock = ui.label().classes('text-sm text-slate-600 dark:text-gray-300 font-mono')
-                ui.timer(1.0, lambda: rt_clock.set_text(datetime.now().strftime("%H:%M:%S")))
-            ui.label('TNB Tariff Rate').classes('text-xs text-slate-500 bg-slate-800 px-3 py-1 rounded-full text-white')
+            ui.label('TNB Tariff Rate').classes('text-xs text-slate-500 bg-slate-800 px-3 py-1 rounded-full')
             ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
 
     with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-0 gap-4 sm:gap-6'):
@@ -656,7 +652,7 @@ def energy_page():
                     timeframe['value'] = e.value
                     refresh_charts()
 
-                ui.toggle(['Live', 'Daily', 'Weekly', 'Monthly'], value='Live',
+                ui.toggle(['Daily', 'Weekly', 'Monthly'], value='Daily',
                           on_change=change_timeframe).classes('w-full')
 
         with ui.card().classes('glass-card p-4 sm:p-6 w-full'):
@@ -730,20 +726,15 @@ def energy_page():
 
         def refresh_charts():
             tf = timeframe['value']
-            if tf == 'Live':
-                now = datetime.now()
-                labels = [(now - timedelta(seconds=(23 - i) * 30)).strftime('%H:%M:%S') for i in range(24)]
-                data = list(plug_data)
-            else:
-                labels, data = _query_prom_range(tf)
-                if not data:
-                    # Fallback to live deque while history is still building up
-                    if tf == 'Daily':
-                        labels, data = hours, list(plug_data)
-                    elif tf == 'Weekly':
-                        labels, data = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], [0.0] * 7
-                    else:
-                        labels, data = [f"Day {i+1}" for i in range(30)], [0.0] * 30
+            labels, data = _query_prom_range(tf)
+            if not data:
+                # Fallback to live deque while history is still building up
+                if tf == 'Daily':
+                    labels, data = hours, list(plug_data)
+                elif tf == 'Weekly':
+                    labels, data = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], [0.0] * 7
+                else:
+                    labels, data = [f"Day {i+1}" for i in range(30)], [0.0] * 30
 
             area_chart.options['xAxis'][0]['data']  = labels
             area_chart.options['series'][0]['data'] = data
