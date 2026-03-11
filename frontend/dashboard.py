@@ -54,7 +54,7 @@ iot_devices: dict = {}
 AI_CACHE_PATH = "/mnt/nvme/Projects/dashboard/gemini_cache.txt"
 ai_insights   = "🤖 Initializing AI analysis...\n💡 Gathering system data..."
 last_update   = ""
-
+ 
 # ─────────────────────────────────────────────────────────────────────────────
 #  GLOBAL STATE — Tuya plug
 # ─────────────────────────────────────────────────────────────────────────────
