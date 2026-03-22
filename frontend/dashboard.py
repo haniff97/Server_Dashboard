@@ -573,9 +573,18 @@ def energy_page():
     ui.colors(primary='#3b82f6', secondary='#8b5cf6', accent='#ec4899',
               positive='#10b981', warning='#f59e0b')
 
-    hours     = [f"{str(i).zfill(2)}:00" for i in range(24)]
     peak_watt = [0.0]
     timeframe = {'value': 'Daily'}
+
+    def _realtime_daily_labels():
+        """Generate 48 rolling 30-min labels ending at the current time."""
+        now  = datetime.now()
+        # Round down to nearest 30 min
+        mins = (now.minute // 30) * 30
+        from datetime import timedelta
+        end  = now.replace(minute=mins, second=0, microsecond=0)
+        return [(end - timedelta(minutes=30 * (47 - i))).strftime('%H:%M')
+                for i in range(48)]
 
     with ui.header().classes('glass-header items-center justify-between p-4 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
         with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto justify-center sm:justify-start mb-2 sm:mb-0'):
@@ -662,7 +671,7 @@ def energy_page():
                 'tooltip': {'trigger': 'axis'},
                 'legend':  {'data': ['Smart Plug'], 'textStyle': {'color': '#94a3b8'}, 'top': 0, 'right': 0},
                 'grid':    {'left': '3%', 'right': '4%', 'bottom': '3%', 'containLabel': True},
-                'xAxis':   [{'type': 'category', 'boundaryGap': False, 'data': hours,
+                'xAxis':   [{'type': 'category', 'boundaryGap': False, 'data': _realtime_daily_labels(),
                              'axisLabel': {'color': '#94a3b8', 'rotate': 45}}],
                 'yAxis':   [{'type': 'value', 'name': 'Power (kW)',
                              'nameTextStyle': {'color': '#94a3b8'},
@@ -679,7 +688,7 @@ def energy_page():
                 'tooltip': {'trigger': 'axis'},
                 'legend':  {'data': ['Smart Plug'], 'textStyle': {'color': '#94a3b8'}, 'top': 0, 'right': 0},
                 'grid':    {'left': '3%', 'right': '4%', 'bottom': '3%', 'containLabel': True},
-                'xAxis':   {'type': 'category', 'boundaryGap': False, 'data': hours,
+                'xAxis':   {'type': 'category', 'boundaryGap': False, 'data': _realtime_daily_labels(),
                             'axisLabel': {'color': '#94a3b8', 'rotate': 45}},
                 'yAxis':   {'type': 'value', 'name': 'Power (kW)',
                             'nameTextStyle': {'color': '#94a3b8'},
@@ -728,13 +737,27 @@ def energy_page():
             tf = timeframe['value']
             labels, data = _query_prom_range(tf)
             if not data:
-                # Fallback to live deque while history is still building up
+                # Fallback: build real-time labels so the axis always shows
+                # actual wall-clock time, not static placeholders
                 if tf == 'Daily':
-                    labels, data = hours, list(plug_data)
+                    rt_labels = _realtime_daily_labels()
+                    # plug_data holds up to 24 points (one per Tuya poll ~30s)
+                    # Pad or trim to match 48 label slots
+                    deque_vals = list(plug_data)
+                    padded = [0.0] * (48 - len(deque_vals)) + deque_vals
+                    labels, data = rt_labels, padded
                 elif tf == 'Weekly':
-                    labels, data = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], [0.0] * 7
+                    from datetime import timedelta
+                    today = datetime.now()
+                    labels = [(today - timedelta(days=6 - i)).strftime('%a %d/%m')
+                              for i in range(7)]
+                    data = [0.0] * 7
                 else:
-                    labels, data = [f"Day {i+1}" for i in range(30)], [0.0] * 30
+                    from datetime import timedelta
+                    today = datetime.now()
+                    labels = [(today - timedelta(days=29 - i)).strftime('%b %d')
+                              for i in range(30)]
+                    data = [0.0] * 30
 
             area_chart.options['xAxis'][0]['data']  = labels
             area_chart.options['series'][0]['data'] = data
@@ -798,9 +821,10 @@ def energy_page():
                 peak_watt[0] = pwr_kw
                 peak_usage_label.set_text(f"{pwr_kw:.3f}")
 
-            refresh_charts()
-
         ui.timer(2.0, update_energy_stats)
+        # Charts refresh independently every 30 s so Prometheus labels
+        # always reflect real current time without hammering the DB.
+        ui.timer(30.0, refresh_charts, immediate=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  STARTUP
