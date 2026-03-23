@@ -159,7 +159,7 @@ def send_command(commands: List[dict]) -> bool:
     return False
 
 # ════════════════════════════════════════════════════════════════════════════
-#   SHARED STATE
+#  SHARED STATE
 # ════════════════════════════════════════════════════════════════════════════
 last_status: Dict[str, Any] = {}
 power_history: deque        = deque(maxlen=HISTORY_MAXLEN)
