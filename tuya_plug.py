@@ -167,7 +167,7 @@ last_poll_ok: bool          = False
 state_lock                  = threading.Lock()
 
 # ════════════════════════════════════════════════════════════════════════════
-#  POLLING THREAD
+#   POLLING THREAD
 # ════════════════════════════════════════════════════════════════════════════
 
 def polling_loop():
