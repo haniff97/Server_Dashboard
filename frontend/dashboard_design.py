@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Custom Homelab Dashboard - DESIGN MODE
-Built with NiceGUI + Mock Data (Simulating Prometheus + Tuya)
+Built with NiceGUI + Mock Data (Simulating tinytuya local LAN + MariaDB)
+Pages: / (Server) | /energy (Energy Monitor) | /plugs (Smart Plugs)
 """
 import os
 import asyncio
@@ -9,7 +10,7 @@ import threading
 import time
 import random
 from collections import deque
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from datetime import datetime
 
 from nicegui import ui, app
@@ -28,18 +29,33 @@ ai_insights = "🤖 Initializing AI analysis...\n💡 Gathering system data..."
 last_update = ""
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  GLOBAL STATE — Tuya plug (MOCKED)
+#  MOCK DEVICE CONFIG (mirrors tuya_local.DEVICES)
 # ─────────────────────────────────────────────────────────────────────────────
-tuya_status: Dict[str, Any] = {
-    "switch_1": True,
-    "cur_power": 1250,
-    "cur_voltage": 2300,
-    "cur_current": 543,
-    "add_ele": 1450
+MOCK_DEVICES = {
+    "plug": {
+        "name":      "Smart Plug",
+        "id":        "mock_plug_001",
+        "ip":        "192.168.1.2",
+        "is_server": False,
+    },
+    "server": {
+        "name":      "Server",
+        "id":        "mock_server_001",
+        "ip":        "192.168.1.15",
+        "is_server": True,
+    },
 }
-tuya_poll_ok: bool = True
-tuya_lock = threading.Lock()
-plug_data: deque = deque([0.0] * 24, maxlen=24)
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  GLOBAL STATE — Smart Plugs (MOCKED tinytuya)
+# ─────────────────────────────────────────────────────────────────────────────
+PLUG_POLL_INTERVAL = 2  # faster for design preview
+
+plug_state: Dict[str, Dict[str, Any]] = {
+    "plug":   {"status": None, "ok": True, "history": deque(maxlen=120)},
+    "server": {"status": None, "ok": True, "history": deque(maxlen=120)},
+}
+plug_lock = threading.Lock()
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  SYSTEM HELPERS (MOCK)
@@ -54,25 +70,49 @@ def get_hdd_status():
     return 'active' if random.random() > 0.7 else 'idle'
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  TUYA POLLING THREAD (MOCK)
+#  PLUG POLLING THREAD (MOCK — simulates tinytuya local LAN)
 # ─────────────────────────────────────────────────────────────────────────────
-def tuya_polling_loop():
-    global tuya_status, tuya_poll_ok
+def plug_polling_loop():
+    """Mock polling loop that generates realistic plug data."""
     while True:
-        with tuya_lock:
-            if tuya_status.get("switch_1", False):
-                tuya_status["cur_power"] = int(random.uniform(115.0, 135.0) * 10)
-                tuya_status["cur_current"] = int((tuya_status["cur_power"] / 10 / 230.0) * 1000)
-                tuya_status["cur_voltage"] = int(random.uniform(228.0, 232.0) * 10)
-                tuya_status["add_ele"] += 1
-            else:
-                tuya_status["cur_power"] = 0
-                tuya_status["cur_current"] = 0
-                tuya_status["cur_voltage"] = int(random.uniform(228.0, 232.0) * 10)
-            
-            tuya_poll_ok = random.random() > 0.05
-            plug_data.append(round(tuya_status.get("cur_power", 0) / 10.0 / 1000.0, 3))
-        time.sleep(2)
+        for dev_key in ("plug", "server"):
+            cfg = MOCK_DEVICES[dev_key]
+
+            with plug_lock:
+                prev = plug_state[dev_key]["status"]
+                is_on = prev["switch"] if prev else True
+
+                if is_on:
+                    if dev_key == "server":
+                        watts = round(random.uniform(80.0, 160.0), 2)
+                    else:
+                        watts = round(random.uniform(5.0, 35.0), 2)
+                else:
+                    watts = 0.0
+
+                voltage = round(random.uniform(228.0, 232.0), 1)
+                current_ma = int(watts / voltage * 1000) if voltage > 0 else 0
+                add_ele_kwh = (prev["add_ele_kwh"] + 0.001) if prev else 1.450
+
+                status = {
+                    "device_key":  dev_key,
+                    "device_name": cfg["name"],
+                    "switch":      is_on,
+                    "watts":       watts,
+                    "voltage":     voltage,
+                    "current_ma":  current_ma,
+                    "add_ele_kwh": round(add_ele_kwh, 4),
+                    "fault":       0,
+                }
+
+                plug_state[dev_key]["status"] = status
+                plug_state[dev_key]["ok"]     = random.random() > 0.05
+                plug_state[dev_key]["history"].append({
+                    "t": datetime.now().strftime("%H:%M:%S"),
+                    "w": watts,
+                })
+
+        time.sleep(PLUG_POLL_INTERVAL)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  SYSTEM METRICS ASYNC LOOP (MOCK)
@@ -115,12 +155,35 @@ async def update_ai_insights():
         try:
             await asyncio.sleep(5)
             if random.random() > 0.7:
-                ai_insights = "Concerns Detected (MOCK):\nHigh CPU usage detected\n\nRecommendation: Check active processes\nTuya plug power draw is normal."
+                ai_insights = "Concerns Detected (MOCK):\nHigh CPU usage detected\n\nRecommendation: Check active processes\nPlug power draw is within normal range."
             else:
                 ai_insights = "All systems healthy (MOCK)\nPerformance: Optimal\nNo immediate concerns"
         except Exception as e:
             ai_insights = f"❌ AI Mock Error: {e}"
         await asyncio.sleep(15)
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  MOCK DB HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
+def mock_get_today_summary(dev_id: str) -> dict:
+    """Simulate db.get_today_summary()."""
+    return {
+        "total_wh":  round(random.uniform(50, 500), 4),
+        "total_kwh": round(random.uniform(0.05, 0.5), 6),
+        "cost_rm":   round(random.uniform(0.01, 0.12), 4),
+    }
+
+def mock_calculate_tnb_cost(kwh: float) -> float:
+    """Simulate db.calculate_tnb_cost()."""
+    tiers = [(200, 0.218), (100, 0.334), (300, 0.516), (float("inf"), 0.546)]
+    cost, remaining = 0.0, kwh
+    for limit, rate in tiers:
+        if remaining <= 0:
+            break
+        usage = min(remaining, limit)
+        cost += usage * rate
+        remaining -= usage
+    return round(cost, 4)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  SHARED STYLES
@@ -135,22 +198,69 @@ def add_common_styles():
             body.body--dark .glass-card { background:rgba(30,41,59,.7); border:1px solid rgba(255,255,255,.1); }
             .glass-header { background:rgba(255,255,255,.8); backdrop-filter:blur(8px); border-bottom:1px solid rgba(0,0,0,.05); }
             body.body--dark .glass-header { background:rgba(15,23,42,.8); border-bottom:1px solid rgba(255,255,255,.05); }
-            .tuya-card { position:relative; overflow:hidden; }
-            .tuya-card.plug-on { border-color:rgba(16,185,129,.5)!important; box-shadow:0 0 24px rgba(16,185,129,.12); }
-            .tuya-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,#10b981,#3b82f6); opacity:0; transition:opacity .3s; }
-            .tuya-card.plug-on::before { opacity:1; }
-            .plug-stat { background:rgba(0,0,0,.04); border-radius:8px; padding:6px 8px; text-align:center; flex:1; }
-            body.body--dark .plug-stat { background:rgba(255,255,255,.06); }
-            .plug-toggle-on  { background:#10b981!important; color:white!important; border-radius:8px!important; font-size:.75rem!important; }
-            .plug-toggle-off { background:rgba(0,0,0,.06)!important; color:#94a3b8!important; border-radius:8px!important; font-size:.75rem!important; }
-            body.body--dark .plug-toggle-off { background:rgba(255,255,255,.08)!important; }
-            .conn-dot-ok  { width:7px;height:7px;border-radius:50%;background:#10b981;display:inline-block;animation:blink 2s infinite; }
-            .conn-dot-err { width:7px;height:7px;border-radius:50%;background:#ef4444;display:inline-block; }
-            @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
             .stat-value { font-family:monospace; font-size:1.5rem; font-weight:700; color:#10b981; }
             .stat-label { font-size:.75rem; color:#94a3b8; text-transform:uppercase; font-weight:600; letter-spacing:.05em; }
+
+            /* Plug page styles */
+            .plug-card { background:rgba(30,41,59,.7); border:1px solid rgba(255,255,255,.1); border-radius:16px; overflow:hidden; transition:all .3s; }
+            .plug-card.plug-on { border-color:rgba(16,185,129,.4); box-shadow:0 0 24px rgba(16,185,129,.1); }
+            .plug-card.server-card { border-color:rgba(248,113,65,.25); }
+            .plug-card::before { content:''; display:block; height:3px; background:linear-gradient(90deg,#10b981,#3b82f6); opacity:0; transition:opacity .3s; }
+            .plug-card.plug-on::before { opacity:1; }
+
+            .plug-stat-strip { display:flex; flex-wrap:wrap; gap:16px; align-items:center; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06); border-radius:12px; padding:14px 18px; }
+            .plug-stat-num { font-family:'Courier New',monospace; font-size:1.4rem; font-weight:700; line-height:1; }
+            .plug-stat-lbl { font-size:.6rem; color:#94a3b8; text-transform:uppercase; letter-spacing:.08em; margin-top:3px; }
+            .plug-sep { width:1px; height:36px; background:rgba(255,255,255,.1); }
+
+            .plug-toggle { width:100%; padding:12px 0!important; border-radius:10px!important; font-family:'Courier New',monospace!important; font-size:.82rem!important; letter-spacing:.08em!important; transition:all .2s!important; }
+            .plug-toggle-on  { background:#10b981!important; color:#04201a!important; }
+            .plug-toggle-off { background:rgba(255,255,255,.06)!important; color:#94a3b8!important; border:1px solid rgba(255,255,255,.1)!important; }
+            .plug-toggle-warn { background:#92400e!important; color:#fef3c7!important; }
+
+            .plug-energy-row { display:flex; flex-wrap:wrap; gap:10px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06); border-radius:12px; padding:14px 18px; }
+
+            .plug-ctrl-btn { background:rgba(255,255,255,.04)!important; border:1px solid rgba(255,255,255,.1)!important; border-radius:9px!important; color:#dde3f0!important; font-family:'Courier New',monospace!important; font-size:.7rem!important; letter-spacing:.05em!important; padding:9px 10px!important; transition:all .2s!important; }
+            .plug-ctrl-btn:hover { border-color:#10b981!important; color:#10b981!important; }
+
+            .plug-led-btn { background:rgba(255,255,255,.04)!important; border:1px solid rgba(255,255,255,.1)!important; border-radius:8px!important; color:#94a3b8!important; font-size:.68rem!important; padding:8px 6px!important; transition:all .2s!important; flex:1; min-width:70px; }
+            .plug-led-btn:hover { border-color:#f59e0b!important; color:#f59e0b!important; }
+
+            .dot-ok  { width:8px;height:8px;border-radius:50%;background:#10b981;display:inline-block;animation:dotblink 2.4s infinite; }
+            .dot-err { width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block; }
+            @keyframes dotblink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+            .plug-warn-banner { background:#7c2d12; border:1px solid #f87171; border-radius:10px; padding:12px 16px; margin-top:10px; font-family:monospace; font-size:.72rem; color:#fca5a5; display:none; }
+            .plug-warn-banner.visible { display:block; }
+
+            .plug-section-title { font-family:'Courier New',monospace; font-size:.68rem; letter-spacing:.1em; text-transform:uppercase; color:#94a3b8; margin-bottom:10px; }
+            .plug-inner-card { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06); border-radius:14px; padding:16px 18px; margin-top:12px; }
         </style>
     ''')
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  NAV TOGGLE HELPER
+# ─────────────────────────────────────────────────────────────────────────────
+def nav_toggle(current: str):
+    """Render the 3-tab navigation toggle."""
+    def on_change(e):
+        if e.value == 'Server':
+            ui.navigate.to('/')
+        elif e.value == 'Energy':
+            ui.navigate.to('/energy')
+        elif e.value == 'Plugs':
+            ui.navigate.to('/plugs')
+
+    with ui.row().classes('w-full flex justify-center mt-2'):
+        ui.toggle(
+            ['Server', 'Energy', 'Plugs'], value=current,
+            on_change=on_change
+        ).props(
+            'unelevated text-color=slate-700 dark:text-color=white'
+        ).classes(
+            'bg-slate-200 dark:bg-slate-800'
+        ).style('border-radius: 10px; overflow: hidden;')
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  PAGE 1 — SERVER  /
@@ -174,18 +284,14 @@ def main_page():
                 ui.label().bind_text_from(globals(), 'last_update').classes('text-sm text-slate-600 dark:text-gray-300 font-mono')
             ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
 
-    # ── Main content ──────────────────────────────────────────────────────
-    with ui.column().classes('w-full max-w-7xl mx-auto p-6 mt-0 gap-8'):
-        with ui.row().classes('w-full flex justify-center mt-2'):
-            ui.toggle(['Server', 'Energy'], value='Server', on_change=lambda e: ui.navigate.to('/energy') if e.value == 'Energy' else None).props('unelevated text-color=slate-700 dark:text-color=white').classes('bg-slate-200 dark:bg-slate-800').style('border-radius: 10px; overflow: hidden;')
+    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-0 gap-4 sm:gap-8'):
+        nav_toggle('Server')
 
-        # System Performance title
         with ui.row().classes('items-center gap-2 mb-2'):
             ui.icon('analytics', color='primary')
             ui.label('System Performance').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
 
-        # Metrics grid
-        with ui.grid().classes('w-full gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-start'):
+        with ui.grid().classes('w-full gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4'):
 
             with ui.card().classes('glass-card p-5 flex flex-col items-center relative overflow-hidden'):
                 ui.label('CPU Load').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
@@ -233,12 +339,10 @@ def main_page():
             ui.label('IoT Environment').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
 
         iot_container = ui.row().classes(
-            'w-full gap-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-stretch')
-        tuya_refs: dict = {}
+            'w-full gap-4 sm:gap-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-stretch')
 
         def update_iot_display():
             iot_container.clear()
-            tuya_refs.clear()
             with iot_container:
                 if iot_devices:
                     for device_id, data in iot_devices.items():
@@ -258,101 +362,52 @@ def main_page():
                                     ui.icon('thermostat', size='xs', color='orange')
                                     ui.label(f"{data.get('temperature', 0)}°C").classes(
                                         'text-lg font-bold text-slate-800 dark:text-white')
-                                    with ui.column().classes('items-center gap-1'):
-                                        ui.icon('water_drop', size='xs', color='blue')
-                                        ui.label(f"{data.get('humidity', 0)}%").classes(
-                                            'text-lg font-bold text-slate-800 dark:text-white')
+                                with ui.column().classes('items-center gap-1'):
+                                    ui.icon('water_drop', size='xs', color='blue')
+                                    ui.label(f"{data.get('humidity', 0)}%").classes(
+                                        'text-lg font-bold text-slate-800 dark:text-white')
 
-                with tuya_lock:
-                    s  = dict(tuya_status)
-                    ok = tuya_poll_ok
-                on = s.get("switch_1", False)
+                # Quick plug status summary cards
+                for dev_key in ("plug", "server"):
+                    with plug_lock:
+                        s  = plug_state[dev_key]["status"]
+                        ok = plug_state[dev_key]["ok"]
+                    cfg = MOCK_DEVICES[dev_key]
 
-                with ui.element("div").classes(
-                    f"tuya-card glass-card p-4 min-w-[200px] h-full flex flex-col "
-                    f"justify-between hover:scale-105 transition-transform {'plug-on' if on else ''}"
-                ) as card:
-                    tuya_refs["card"] = card
-                    with ui.row().classes("items-center justify-between mb-3"):
-                        with ui.row().classes("items-center gap-2"):
-                            ui.icon("power", size="xs", color="positive" if on else "grey")
-                            with ui.column().classes("gap-0"):
-                                ui.label("Smart Plug").classes(
-                                    "text-sm font-bold text-slate-700 dark:text-slate-200")
-                                tuya_refs["status_lbl"] = ui.label("ON" if on else "OFF").classes(
-                                    f"text-[10px] uppercase tracking-wide font-semibold "
-                                    f"{'text-positive' if on else 'text-slate-400'}")
-                        tuya_refs["dot"] = ui.element("span").classes(
-                            "conn-dot-ok" if ok else "conn-dot-err")
+                    with ui.card().classes(
+                        'glass-card p-4 min-w-[200px] hover:scale-105 '
+                        'transition-transform h-full flex flex-col justify-between'):
+                        with ui.row().classes('items-center gap-3 mb-3'):
+                            ui.icon('power', size='xs',
+                                    color='positive' if (s and s["switch"]) else 'grey')
+                            with ui.column().classes('gap-0'):
+                                ui.label(cfg["name"]).classes(
+                                    'text-md font-bold text-slate-700 dark:text-slate-200')
+                                if ok and s:
+                                    ui.label('ON' if s["switch"] else 'OFF').classes(
+                                        f'text-[10px] uppercase tracking-wide font-semibold '
+                                        f'{"text-positive" if s["switch"] else "text-slate-400"}')
+                                else:
+                                    ui.label('Offline').classes(
+                                        'text-[10px] text-red-400 uppercase tracking-wide')
+                        ui.separator().classes('bg-slate-300/50 dark:bg-slate-700/50 mb-3')
+                        if s:
+                            with ui.row().classes('justify-between items-center gap-6 mt-auto'):
+                                with ui.column().classes('items-center gap-1'):
+                                    ui.icon('bolt', size='xs', color='warning')
+                                    ui.label(f"{s['watts']:.1f}W").classes(
+                                        'text-lg font-bold text-slate-800 dark:text-white')
+                                with ui.column().classes('items-center gap-1'):
+                                    ui.icon('electrical_services', size='xs', color='blue')
+                                    ui.label(f"{s['voltage']:.1f}V").classes(
+                                        'text-lg font-bold text-slate-800 dark:text-white')
+                        else:
+                            ui.label('No data').classes('text-sm text-slate-500 mt-auto')
 
-                    ui.separator().classes("bg-slate-300/50 dark:bg-slate-700/50 mb-3")
-
-                    with ui.row().classes("gap-2 mb-3"):
-                        for ref_key, label, color, val_key, scale, fmt in [
-                            ("power",   "W", "#f59e0b", "cur_power",   10.0,   ".1f"),
-                            ("voltage", "V", "#8b5cf6", "cur_voltage", 10.0,   ".1f"),
-                            ("current", "A", "#3b82f6", "cur_current", 1000.0, ".3f"),
-                        ]:
-                            val = s.get(val_key, 0) / scale
-                            with ui.element("div").classes("plug-stat"):
-                                tuya_refs[ref_key] = ui.label(f"{val:{fmt}}").style(
-                                    f"font-size:.9rem;font-weight:700;color:{color};"
-                                    f"font-family:monospace;line-height:1")
-                                ui.label(label).style(
-                                    "font-size:.6rem;color:#94a3b8;"
-                                    "text-transform:uppercase;margin-top:2px")
-
-                    en = s.get("add_ele", 0) / 1000.0
-                    with ui.element("div").classes("plug-stat mb-3"):
-                        tuya_refs["energy"] = ui.label(f"{en:.3f}").style(
-                            "font-size:.85rem;font-weight:700;color:#10b981;"
-                            "font-family:monospace;line-height:1")
-                        ui.label("kWh Today").style(
-                            "font-size:.6rem;color:#94a3b8;"
-                            "text-transform:uppercase;margin-top:2px")
-
-                    def _do_toggle():
-                        with tuya_lock:
-                            current = tuya_status.get("switch_1", False)
-                            new_state = not current
-                            tuya_status["switch_1"] = new_state
-                        ui.notify(
-                            f"{'✅ Plug ON' if new_state else '🔴 Plug OFF'} (Mock)",
-                            type="positive" if new_state else "negative")
-
-                    tuya_refs["toggle"] = ui.button(
-                        "● ON" if on else "○ OFF", on_click=_do_toggle
-                    ).classes(f"{'plug-toggle-on' if on else 'plug-toggle-off'} w-full").props("dense")
-
-        ui.timer(2.0, update_iot_display)
-
-        def _update_tuya_labels():
-            if not tuya_refs:
-                return
-            with tuya_lock:
-                s  = dict(tuya_status)
-                ok = tuya_poll_ok
-            on = s.get("switch_1", False)
-            try:
-                tuya_refs["power"].set_text(f"{s.get('cur_power',0)/10:.1f}")
-                tuya_refs["voltage"].set_text(f"{s.get('cur_voltage',0)/10:.1f}")
-                tuya_refs["current"].set_text(f"{s.get('cur_current',0)/1000:.3f}")
-                tuya_refs["energy"].set_text(f"{s.get('add_ele',0)/1000:.3f}")
-                tuya_refs["status_lbl"].set_text("ON" if on else "OFF")
-                tuya_refs["toggle"].set_text("● ON" if on else "○ OFF")
-                tuya_refs["toggle"].classes(
-                    remove="plug-toggle-on plug-toggle-off"
-                ).classes("plug-toggle-on" if on else "plug-toggle-off")
-                tuya_refs["dot"].classes(
-                    remove="conn-dot-ok conn-dot-err"
-                ).classes("conn-dot-ok" if ok else "conn-dot-err")
-            except Exception:
-                pass
-
-        ui.timer(1.0, _update_tuya_labels)
+        ui.timer(5.0, update_iot_display)
 
         with ui.card().classes(
-            'glass-card w-full p-6 mt-4 bg-slate-200/50 dark:bg-slate-800/50 '
+            'glass-card w-full p-4 sm:p-6 mt-2 sm:mt-4 bg-slate-200/50 dark:bg-slate-800/50 '
             'border-l-4 border-slate-300 dark:border-white'):
             with ui.row().classes('items-start gap-4'):
                 with ui.column().classes('w-full'):
@@ -373,16 +428,7 @@ def energy_page():
               positive='#10b981', warning='#f59e0b')
 
     peak_watt = [0.0]
-    timeframe = {'value': 'Daily'}
-
-    def _realtime_daily_labels():
-        """Generate 48 rolling 30-min labels ending at the current time."""
-        from datetime import timedelta
-        now  = datetime.now()
-        mins = (now.minute // 30) * 30
-        end  = now.replace(minute=mins, second=0, microsecond=0)
-        return [(end - timedelta(minutes=30 * (47 - i))).strftime('%H:%M')
-                for i in range(48)]
+    selected_device = {'value': 'plug'}
 
     with ui.header().classes('glass-header items-center justify-between p-4 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
         with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto justify-center sm:justify-start mb-2 sm:mb-0'):
@@ -394,8 +440,7 @@ def energy_page():
             ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
 
     with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-0 gap-4 sm:gap-6'):
-        with ui.row().classes('w-full flex justify-center mt-2 mb-2'):
-            ui.toggle(['Server', 'Energy'], value='Energy', on_change=lambda e: ui.navigate.to('/') if e.value == 'Server' else None).props('unelevated text-color=slate-700 dark:text-color=white').classes('bg-slate-200 dark:bg-slate-800').style('border-radius: 5px; overflow: hidden;')
+        nav_toggle('Energy')
 
         with ui.row().classes('w-full gap-4 sm:gap-6 items-stretch flex-col lg:flex-row'):
 
@@ -444,7 +489,7 @@ def energy_page():
                 with ui.card().classes('glass-card p-4 w-full flex flex-row items-center justify-between'):
                     with ui.column():
                         ui.label('EST. TODAY COST').classes('stat-label')
-                        ui.label('July 2025 TNB Tariff (est. share)').classes('text-[10px] text-slate-500')
+                        ui.label('TNB Tariff Residential').classes('text-[10px] text-slate-500')
                     with ui.row().classes('items-baseline gap-1'):
                         ui.label('RM').classes('text-xs text-slate-400 font-bold')
                         cost_label = ui.label('0.0000').classes('stat-value text-accent')
@@ -452,114 +497,55 @@ def energy_page():
             with ui.card().classes('glass-card p-4 sm:p-6 flex flex-col gap-4 w-full lg:w-[300px]'):
                 ui.label('Controls').classes('text-sm font-bold text-slate-400 uppercase')
 
-                ui.select(['All Devices', 'Smart Plug'], value='All Devices',
-                          label='Device Selector').classes('w-full')
+                def on_device_change(e):
+                    selected_device['value'] = 'server' if e.value == 'Server Plug' else 'plug'
 
-                def change_timeframe(e):
-                    timeframe['value'] = e.value
-                    refresh_charts()
+                ui.select(
+                    ['Smart Plug', 'Server Plug'], value='Smart Plug',
+                    label='Device Selector', on_change=on_device_change
+                ).classes('w-full')
 
-                ui.toggle(['Daily', 'Weekly', 'Monthly'], value='Daily',
-                          on_change=change_timeframe).classes('w-full')
-
+        # ── Power history chart ──────────────────────────────────────────────
         with ui.card().classes('glass-card p-4 sm:p-6 w-full'):
-            ui.label('Power Usage — Smart Plug').classes(
+            ui.label('Power Usage — Live').classes(
                 'text-sm font-bold text-slate-400 uppercase mb-4')
             area_chart = ui.echart({
                 'tooltip': {'trigger': 'axis'},
-                'legend':  {'data': ['Smart Plug'], 'textStyle': {'color': '#94a3b8'}, 'top': 0, 'right': 0},
+                'legend':  {'data': ['Power (W)'], 'textStyle': {'color': '#94a3b8'}, 'top': 0, 'right': 0},
                 'grid':    {'left': '3%', 'right': '4%', 'bottom': '3%', 'containLabel': True},
-                'xAxis':   [{'type': 'category', 'boundaryGap': False, 'data': _realtime_daily_labels(),
+                'xAxis':   [{'type': 'category', 'boundaryGap': False, 'data': [],
                              'axisLabel': {'color': '#94a3b8', 'rotate': 45}}],
-                'yAxis':   [{'type': 'value', 'name': 'Power (kW)',
+                'yAxis':   [{'type': 'value', 'name': 'Watts',
                              'nameTextStyle': {'color': '#94a3b8'},
                              'axisLabel': {'color': '#94a3b8'}}],
-                'series':  [{'name': 'Smart Plug', 'type': 'line', 'stack': 'Total',
-                             'areaStyle': {}, 'emphasis': {'focus': 'series'},
-                             'itemStyle': {'color': '#3b82f6'}, 'data': list(plug_data)}],
+                'series':  [{'name': 'Power (W)', 'type': 'line', 'smooth': True,
+                             'areaStyle': {'color': {
+                                 'type': 'linear', 'x': 0, 'y': 0, 'x2': 0, 'y2': 1,
+                                 'colorStops': [
+                                     {'offset': 0, 'color': 'rgba(59,130,246,.4)'},
+                                     {'offset': 1, 'color': 'rgba(59,130,246,.02)'},
+                                 ],
+                             }},
+                             'itemStyle': {'color': '#3b82f6'}, 'data': []}],
             }).classes('w-full h-[300px]')
 
-        with ui.card().classes('glass-card p-4 sm:p-6 w-full'):
-            ui.label('Power Draw Trends').classes(
-                'text-sm font-bold text-slate-400 uppercase mb-4')
-            line_chart = ui.echart({
-                'tooltip': {'trigger': 'axis'},
-                'legend':  {'data': ['Smart Plug'], 'textStyle': {'color': '#94a3b8'}, 'top': 0, 'right': 0},
-                'grid':    {'left': '3%', 'right': '4%', 'bottom': '3%', 'containLabel': True},
-                'xAxis':   {'type': 'category', 'boundaryGap': False, 'data': _realtime_daily_labels(),
-                            'axisLabel': {'color': '#94a3b8', 'rotate': 45}},
-                'yAxis':   {'type': 'value', 'name': 'Power (kW)',
-                             'nameTextStyle': {'color': '#94a3b8'},
-                             'axisLabel': {'color': '#94a3b8'}},
-                'series':  [{'name': 'Smart Plug', 'type': 'line', 'smooth': True,
-                             'itemStyle': {'color': '#3b82f6'}, 'data': list(plug_data)}],
-            }).classes('w-full h-[350px]')
-
-        def _mock_query_prom_range(duration: str):
-            """Mock Prometheus historical data for testing charts dynamically!"""
-            from datetime import timedelta
-            today = datetime.now()
-            if duration == 'Daily':
-                rt_labels = _realtime_daily_labels()
-                deque_vals = list(plug_data)
-                padded = [0.0] * (48 - len(deque_vals)) + deque_vals
-                return rt_labels, padded
-            elif duration == 'Weekly':
-                labels = [(today - timedelta(days=6 - i)).strftime('%a %d/%m') for i in range(7)]
-                return labels, [random.uniform(2.0, 5.0) for _ in range(7)]
-            else:  # Monthly
-                labels = [(today - timedelta(days=29 - i)).strftime('%b %d') for i in range(30)]
-                return labels, [random.uniform(1.5, 4.5) for _ in range(30)]
-
-        def refresh_charts():
-            tf = timeframe['value']
-            labels, data = _mock_query_prom_range(tf)
-
-            area_chart.options['xAxis'][0]['data']  = labels
-            area_chart.options['series'][0]['data'] = data
-            area_chart.update()
-            
-            line_chart.options['xAxis']['data']     = labels
-            line_chart.options['series'][0]['data'] = data
-            line_chart.update()
-
-        def calculate_tnb_bill(cumulative_monthly_kwh):
-            if cumulative_monthly_kwh <= 0:
-                return 0.0
-            if cumulative_monthly_kwh <= 1500:
-                base_cost = cumulative_monthly_kwh * 0.4443
-            else:
-                base_cost = (1500 * 0.4443) + ((cumulative_monthly_kwh - 1500) * 0.5443)
-            rebate_tiers = [
-                (200, 0.250), (250, 0.245), (300, 0.225), (350, 0.210),
-                (400, 0.170), (450, 0.145), (500, 0.120), (550, 0.105),
-                (600, 0.090), (650, 0.075), (700, 0.055), (750, 0.045),
-                (800, 0.040), (850, 0.025), (900, 0.010), (1000, 0.005)
-            ]
-            total_rebate      = 0.0
-            kwh_accounted_for = 0
-            for tier_max, rebate_rate in rebate_tiers:
-                if cumulative_monthly_kwh > kwh_accounted_for:
-                    kwh_in_this_tier  = min(cumulative_monthly_kwh, tier_max) - kwh_accounted_for
-                    total_rebate     += kwh_in_this_tier * rebate_rate
-                    kwh_accounted_for = tier_max
-                else:
-                    break
-            retail_charge = 10.00 if cumulative_monthly_kwh > 600 else 0.0
-            return base_cost - total_rebate + retail_charge
-
         def update_energy_stats():
-            with tuya_lock:
-                pwr_raw   = tuya_status.get('cur_power', 0)
-                today_raw = tuya_status.get('add_ele',   0)
+            dk = selected_device['value']
 
-            pwr_kw    = pwr_raw   / 10.0 / 1000.0
-            today_kwh = today_raw / 1000.0
+            with plug_lock:
+                s = plug_state[dk]["status"]
+                history = list(plug_state[dk]["history"])
 
-            total_month_kwh  = today_kwh * 30.0
-            total_month_cost = calculate_tnb_bill(total_month_kwh)
-            cost_before      = calculate_tnb_bill(max(0, total_month_kwh - today_kwh))
-            cost             = total_month_cost - cost_before
+            if not s:
+                return
+
+            pwr_w  = s["watts"]
+            pwr_kw = pwr_w / 1000.0
+
+            # Mock today's energy
+            today = mock_get_today_summary(MOCK_DEVICES[dk]["id"])
+            today_kwh = today["total_kwh"]
+            cost_rm   = today["cost_rm"]
 
             try:
                 gauge.options['series'][0]['progress']['itemStyle']['color'] = (
@@ -572,23 +558,304 @@ def energy_page():
             gauge.options['series'][0]['data'][0]['value'] = round(pwr_kw, 3)
             gauge.update()
             total_kwh_label.set_text(f"{today_kwh:.3f}")
-            cost_label.set_text(f"{cost:.4f}")
+            cost_label.set_text(f"{cost_rm:.4f}")
 
             if pwr_kw > peak_watt[0]:
                 peak_watt[0] = pwr_kw
                 peak_usage_label.set_text(f"{pwr_kw:.3f}")
 
+            # Update chart with history
+            labels = [p["t"] for p in history]
+            values = [round(p["w"], 1) for p in history]
+            area_chart.options['xAxis'][0]['data']  = labels
+            area_chart.options['series'][0]['data'] = values
+            area_chart.update()
+
         ui.timer(2.0, update_energy_stats)
-        # Charts refresh on their own 30s cycle so labels stay current
-        ui.timer(30.0, refresh_charts, immediate=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  PLUG PAGE HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
+def _plug_chart_options(dev_key: str) -> dict:
+    """Build ECharts options for a plug's power history."""
+    with plug_lock:
+        pts = list(plug_state[dev_key]["history"])
+    labels = [p["t"] for p in pts]
+    values = [round(p["w"], 1) for p in pts]
+    return {
+        "backgroundColor": "transparent",
+        "tooltip": {
+            "trigger": "axis",
+            "backgroundColor": "#1e293b", "borderColor": "#334155",
+            "textStyle": {"color": "#f8fafc", "fontFamily": "Courier New", "fontSize": 11},
+        },
+        "grid": {"left": "9%", "right": "3%", "top": "10%", "bottom": "20%"},
+        "xAxis": {
+            "type": "category", "data": labels,
+            "axisLabel": {"color": "#94a3b8", "fontSize": 9, "rotate": 35},
+            "axisLine": {"lineStyle": {"color": "#334155"}},
+        },
+        "yAxis": {
+            "type": "value",
+            "axisLabel": {"color": "#94a3b8", "fontSize": 9},
+            "splitLine": {"lineStyle": {"color": "#334155", "type": "dashed"}},
+        },
+        "series": [{
+            "data": values, "type": "line", "smooth": True, "symbol": "none",
+            "lineStyle": {"color": "#10b981", "width": 2},
+            "areaStyle": {"color": {
+                "type": "linear", "x": 0, "y": 0, "x2": 0, "y2": 1,
+                "colorStops": [
+                    {"offset": 0, "color": "rgba(16,185,129,.28)"},
+                    {"offset": 1, "color": "rgba(16,185,129,.02)"},
+                ],
+            }},
+        }],
+    }
+
+
+def _build_plug_panel(dev_key: str) -> dict:
+    """Build one full device card for the /plugs page. Returns UI refs."""
+    cfg       = MOCK_DEVICES[dev_key]
+    is_server = cfg["is_server"]
+    dev_id    = cfg["id"]
+
+    server_off_confirm = {"pending": False}
+
+    card_cls = "plug-card server-card" if is_server else "plug-card"
+    with plug_lock:
+        s  = plug_state[dev_key]["status"]
+        ok = plug_state[dev_key]["ok"]
+    on = s["switch"] if s else True
+    if on:
+        card_cls += " plug-on"
+
+    with ui.element("div").classes(card_cls).style("padding:22px") as card_el:
+
+        # Header
+        with ui.row().classes("items-center justify-between mb-3"):
+            with ui.element("div"):
+                ui.label(cfg["name"].upper()).classes("plug-section-title").style("margin-bottom:2px")
+                if is_server:
+                    ui.label("⚠ SERVER POWER — DOUBLE CONFIRM TO OFF").style(
+                        "font-size:.6rem;color:#f87171;font-family:monospace;letter-spacing:.08em")
+            conn_dot = ui.element("span").classes("dot-ok" if ok else "dot-err")
+
+        # Status strip
+        with ui.element("div").classes("plug-stat-strip"):
+            ref_watts = ui.label("—").classes("plug-stat-num").style("color:#f59e0b")
+            ui.label("W · POWER").classes("plug-stat-lbl")
+            ui.element("div").classes("plug-sep")
+            ref_voltage = ui.label("—").classes("plug-stat-num").style("color:#a78bfa")
+            ui.label("V · VOLTAGE").classes("plug-stat-lbl")
+            ui.element("div").classes("plug-sep")
+            ref_current = ui.label("—").classes("plug-stat-num").style("color:#fb923c")
+            ui.label("mA · CURRENT").classes("plug-stat-lbl")
+
+        # Toggle button
+        toggle_btn = ui.button(
+            "● ON" if on else "○ OFF",
+            on_click=lambda: handle_toggle()
+        ).classes(f"plug-toggle {'plug-toggle-on' if on else 'plug-toggle-off'}").style("margin-top:14px")
+
+        # Warning banner (server only)
+        if is_server:
+            warn_ref = ui.element("div").classes("plug-warn-banner")
+            with warn_ref:
+                ui.label("⚠ WARNING: This will cut power to the server. Click OFF again to confirm.")
+        else:
+            warn_ref = None
+
+        def handle_toggle():
+            with plug_lock:
+                st = plug_state[dev_key]["status"]
+            current_on = st["switch"] if st else True
+
+            if not current_on:
+                # Turn ON (mock)
+                with plug_lock:
+                    if plug_state[dev_key]["status"]:
+                        plug_state[dev_key]["status"]["switch"] = True
+                ui.notify("✅ Turned ON (Mock)", type="positive")
+                server_off_confirm["pending"] = False
+                return
+
+            if is_server and not server_off_confirm["pending"]:
+                server_off_confirm["pending"] = True
+                toggle_btn.classes(remove="plug-toggle-on plug-toggle-off").classes("plug-toggle-warn")
+                toggle_btn.set_text("⚠ CLICK AGAIN TO CONFIRM OFF")
+                if warn_ref:
+                    warn_ref.style("display:block")
+                ui.notify("⚠ Server plug — click again to confirm OFF", type="warning")
+                return
+
+            # Actually turn off (mock)
+            with plug_lock:
+                if plug_state[dev_key]["status"]:
+                    plug_state[dev_key]["status"]["switch"] = False
+            server_off_confirm["pending"] = False
+            if warn_ref:
+                warn_ref.style("display:none")
+            ui.notify("🔴 Turned OFF (Mock)", type="negative")
+
+        # Energy strip
+        with ui.element("div").classes("plug-energy-row").style("margin-top:14px"):
+            with ui.element("div"):
+                ref_today_kwh = ui.label("—").style(
+                    "font-family:monospace;font-size:1.1rem;font-weight:600;color:#34d399")
+                ui.label("TODAY kWh").classes("plug-stat-lbl")
+            ui.element("div").classes("plug-sep")
+            with ui.element("div"):
+                ref_today_rm = ui.label("—").style(
+                    "font-family:monospace;font-size:1.1rem;font-weight:600;color:#34d399")
+                ui.label("TODAY RM EST.").classes("plug-stat-lbl")
+            ui.element("div").classes("plug-sep")
+            with ui.element("div"):
+                ref_total_kwh = ui.label("—").style(
+                    "font-family:monospace;font-size:1.1rem;font-weight:600;color:#a5b4fc")
+                ui.label("LIFETIME kWh").classes("plug-stat-lbl")
+
+        # Chart
+        with ui.element("div").classes("plug-inner-card"):
+            ui.label("POWER HISTORY (W)").classes("plug-section-title")
+            chart = ui.echart(_plug_chart_options(dev_key)).style("height:180px;width:100%")
+
+        # Controls
+        with ui.element("div").classes("plug-inner-card"):
+            ui.label("CONTROLS").classes("plug-section-title")
+
+            with ui.row().classes("gap-2 w-full"):
+                ui.button("🔒 Lock ON",
+                    on_click=lambda: ui.notify("✅ Child Lock ON (Mock)", type="positive")
+                ).classes("plug-ctrl-btn")
+                ui.button("🔓 Lock OFF",
+                    on_click=lambda: ui.notify("✅ Child Lock OFF (Mock)", type="positive")
+                ).classes("plug-ctrl-btn")
+
+            with ui.row().classes("gap-2 items-end w-full").style("margin-top:10px"):
+                countdown_inp = ui.number(
+                    label="Countdown (seconds)", value=0, min=0, max=86400
+                ).props("dense outlined").style("flex:1;font-size:.8rem")
+                ui.button("Set",
+                    on_click=lambda: ui.notify(f"✅ Timer {int(countdown_inp.value or 0)}s (Mock)", type="positive")
+                ).props("dense").style("font-size:.72rem;padding:6px 14px")
+
+        # LED control
+        with ui.element("div").classes("plug-inner-card"):
+            ui.label("INDICATOR LED").classes("plug-section-title")
+            with ui.row().classes("gap-2 w-full"):
+                for label, val in [("Follow Relay", "relay"), ("Always ON", "pos"), ("Always OFF", "none")]:
+                    ui.button(label,
+                        on_click=lambda l=label: ui.notify(f"✅ LED → {l} (Mock)", type="positive")
+                    ).classes("plug-led-btn")
+
+    return {
+        "card_el":       card_el,
+        "conn_dot":      conn_dot,
+        "toggle_btn":    toggle_btn,
+        "warn_ref":      warn_ref,
+        "ref_watts":     ref_watts,
+        "ref_voltage":   ref_voltage,
+        "ref_current":   ref_current,
+        "ref_today_kwh": ref_today_kwh,
+        "ref_today_rm":  ref_today_rm,
+        "ref_total_kwh": ref_total_kwh,
+        "chart":         chart,
+        "server_off_confirm": server_off_confirm,
+        "dev_key":       dev_key,
+        "dev_id":        dev_id,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  PAGE 3 — PLUGS  /plugs
+# ─────────────────────────────────────────────────────────────────────────────
+@ui.page('/plugs')
+def plugs_page():
+    dark_mode = ui.dark_mode()
+    dark_mode.enable()
+    add_common_styles()
+    ui.colors(primary='#3b82f6', secondary='#8b5cf6', accent='#ec4899',
+              positive='#10b981', warning='#f59e0b')
+
+    with ui.header().classes('glass-header items-center justify-between p-4 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
+        with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto justify-center sm:justify-start mb-2 sm:mb-0'):
+            ui.icon('power', size='md', color='positive')
+            ui.label('Smart Plugs').classes('text-2xl font-bold tracking-tight text-slate-900 dark:text-white')
+
+        with ui.row().classes('items-center justify-center sm:justify-end gap-4 z-10 w-full sm:w-auto mb-2 sm:mb-0'):
+            ui.label('LOCAL LAN · MOCK').classes(
+                'text-xs text-slate-500 bg-slate-800 px-3 py-1 rounded-full font-mono')
+            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes(
+                'text-slate-900 dark:text-white'
+            ).bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
+
+    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-0 gap-4 sm:gap-6'):
+        nav_toggle('Plugs')
+
+        with ui.row().classes('items-center gap-2 mb-2'):
+            ui.icon('electrical_services', color='positive')
+            ui.label('Device Control').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
+
+        with ui.grid().classes('w-full gap-6 grid-cols-1 lg:grid-cols-2'):
+            plug_refs   = _build_plug_panel("plug")
+            server_refs = _build_plug_panel("server")
+
+    # ── Live update timer ────────────────────────────────────────────────
+    def _update_panel(refs: dict):
+        dk = refs["dev_key"]
+        with plug_lock:
+            s  = plug_state[dk]["status"]
+            ok = plug_state[dk]["ok"]
+
+        refs["conn_dot"].classes(remove="dot-ok dot-err").classes("dot-ok" if ok else "dot-err")
+
+        if not s:
+            return
+
+        on = s["switch"]
+
+        # Toggle button (skip if warn-pending)
+        if not refs.get("server_off_confirm", {}).get("pending"):
+            refs["toggle_btn"].classes(
+                remove="plug-toggle-on plug-toggle-off plug-toggle-warn"
+            ).classes("plug-toggle-on" if on else "plug-toggle-off")
+            refs["toggle_btn"].set_text("● ON" if on else "○ OFF")
+
+        # Card on/off glow
+        if on:
+            refs["card_el"].classes(add="plug-on")
+        else:
+            refs["card_el"].classes(remove="plug-on")
+
+        # Live readings
+        refs["ref_watts"].set_text(f"{s['watts']:.1f}")
+        refs["ref_voltage"].set_text(f"{s['voltage']:.1f}")
+        refs["ref_current"].set_text(f"{s['current_ma']}")
+        refs["ref_total_kwh"].set_text(f"{s['add_ele_kwh']:.3f}")
+
+        # Today's energy (mock)
+        today = mock_get_today_summary(refs["dev_id"])
+        refs["ref_today_kwh"].set_text(f"{today['total_kwh']:.4f}")
+        refs["ref_today_rm"].set_text(f"RM {today['cost_rm']:.4f}")
+
+        # Chart
+        refs["chart"].options = _plug_chart_options(dk)
+        refs["chart"].update()
+
+    def _refresh_plugs():
+        _update_panel(plug_refs)
+        _update_panel(server_refs)
+
+    ui.timer(2.0, _refresh_plugs)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  STARTUP
 # ─────────────────────────────────────────────────────────────────────────────
 app.on_startup(lambda: asyncio.create_task(update_metrics()))
 app.on_startup(lambda: asyncio.create_task(update_ai_insights()))
-
-# Tuya runs in a background thread
-threading.Thread(target=tuya_polling_loop, daemon=True).start()
+threading.Thread(target=plug_polling_loop, daemon=True).start()
 
 ui.run(host='0.0.0.0', port=3000, title='Homelab Dashboard Design', reload=False, favicon='🏠')

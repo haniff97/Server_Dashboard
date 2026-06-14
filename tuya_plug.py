@@ -537,5 +537,5 @@ if __name__ == "__main__":
     threading.Thread(target=polling_loop, daemon=True).start()
     print(f"Polling both plugs every {POLL_INTERVAL}s...")
 
-    ui.run(title="Smart Plug Monitor", host="0.0.0.0", port=8080,
+    ui.run(title="Smart Plug Monitor", host="0.0.0.0", port=3003,
            favicon="⚡", dark=True, reload=False)
