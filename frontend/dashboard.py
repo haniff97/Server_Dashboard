@@ -461,7 +461,7 @@ def energy_page():
               positive='#10b981', warning='#f59e0b')
 
     peak_watt = [0.0]
-    selected_device = {'value': 'plug'}  # default device for energy view
+    selected_device = {'value': 'all'}  # default device for energy view
 
     with ui.header().classes('glass-header items-center justify-between p-4 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
         with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto justify-center sm:justify-start mb-2 sm:mb-0'):
@@ -475,42 +475,32 @@ def energy_page():
     with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-0 gap-4 sm:gap-6'):
         nav_toggle('Energy')
 
+        with ui.grid().classes('w-full gap-4 sm:gap-6 grid-cols-1 md:grid-cols-3 items-stretch'):
+
+            # 1. Live Power
+            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center relative overflow-hidden'):
+                ui.label('LIVE POWER').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
+                ui.icon('bolt', size='sm', color='warning').classes('absolute top-4 right-4 opacity-30')
+                live_power_label = ui.label('0.0').classes('text-5xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-yellow-400 to-orange-500 mt-6 drop-shadow-[0_0_15px_rgba(245,158,11,0.4)] transition-all duration-300')
+                ui.label('Watts (W)').classes('text-xs text-slate-500 mt-2 uppercase tracking-widest font-semibold')
+                
+            # 2. Today's Total Energy
+            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center relative overflow-hidden'):
+                ui.label("TODAY'S ENERGY").classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
+                ui.icon('eco', size='sm', color='positive').classes('absolute top-4 right-4 opacity-30')
+                total_kwh_label = ui.label('0.000').classes('text-5xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-green-400 to-emerald-500 mt-6 drop-shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all duration-300')
+                ui.label('kWh').classes('text-xs text-slate-500 mt-2 uppercase tracking-widest font-semibold')
+
+            # 3. Total Cost
+            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center relative overflow-hidden'):
+                ui.label("TOTAL COST").classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
+                ui.icon('payments', size='sm', color='primary').classes('absolute top-4 right-4 opacity-30')
+                cost_label = ui.label('0.00').classes('text-5xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-blue-400 to-indigo-500 mt-6 drop-shadow-[0_0_15px_rgba(59,130,246,0.4)] transition-all duration-300')
+                ui.label('RM').classes('text-xs text-slate-500 mt-2 uppercase tracking-widest font-semibold')
+
         with ui.row().classes('w-full gap-4 sm:gap-6 items-stretch flex-col lg:flex-row'):
 
-            with ui.card().classes('glass-card p-4 sm:p-6 flex flex-col items-center justify-center flex-1 w-full'):
-                ui.label('Current Power Draw').classes('text-sm font-bold text-slate-400 mb-2 uppercase')
-                gauge = ui.echart({
-                    'series': [{
-                        'type': 'gauge', 'startAngle': 180, 'endAngle': 0,
-                        'min': 0, 'max': 5, 'splitNumber': 5,
-                        'radius': '100%', 'center': ['50%', '80%'],
-                        'axisLine': {'lineStyle': {'width': 20, 'color': [[1, 'rgba(255,255,255,0.1)']]}},
-                        'progress': {'show': True, 'width': 20, 'itemStyle': {'color': 'auto'}},
-                        'pointer':   {'show': False},
-                        'axisTick':  {'show': False},
-                        'splitLine': {'show': False},
-                        'axisLabel': {'show': False},
-                        'title':     {'show': False},
-                        'detail': {
-                            'valueAnimation': True,
-                            'formatter': '{value} kW',
-                            'color': 'white', 'fontSize': 32, 'fontWeight': 'bold',
-                            'offsetCenter': [0, '-20%'],
-                        },
-                        'data': [{'value': 0}],
-                    }]
-                }).classes('w-full h-[200px]')
-
             with ui.column().classes('flex flex-col gap-4 flex-1 justify-center w-full'):
-
-                with ui.card().classes('glass-card p-4 w-full flex flex-row items-center justify-between'):
-                    with ui.column():
-                        ui.label('TOTAL KWH TODAY').classes('stat-label')
-                        ui.label('Accumulated energy since midnight').classes('text-[10px] text-slate-500')
-                    with ui.row().classes('items-baseline gap-1'):
-                        total_kwh_label = ui.label('0.000').classes('stat-value')
-                        ui.label('kWh').classes('text-xs text-slate-400 font-bold')
-
                 with ui.card().classes('glass-card p-4 w-full flex flex-row items-center justify-between'):
                     with ui.column():
                         ui.label('PEAK USAGE').classes('stat-label')
@@ -521,20 +511,25 @@ def energy_page():
 
                 with ui.card().classes('glass-card p-4 w-full flex flex-row items-center justify-between'):
                     with ui.column():
-                        ui.label('EST. TODAY COST').classes('stat-label')
-                        ui.label('TNB Tariff Residential').classes('text-[10px] text-slate-500')
+                        ui.label('MONTH ACCUMULATE USAGE').classes('stat-label')
+                        ui.label('Total energy this month').classes('text-[10px] text-slate-500')
                     with ui.row().classes('items-baseline gap-1'):
-                        ui.label('RM').classes('text-xs text-slate-400 font-bold')
-                        cost_label = ui.label('0.0000').classes('stat-value text-accent')
+                        month_usage_label = ui.label('0.000').classes('stat-value text-secondary')
+                        ui.label('kWh').classes('text-xs text-slate-400 font-bold')
 
             with ui.card().classes('glass-card p-4 sm:p-6 flex flex-col gap-4 w-full lg:w-[300px]'):
                 ui.label('Controls').classes('text-sm font-bold text-slate-400 uppercase')
 
                 def on_device_change(e):
-                    selected_device['value'] = 'server' if e.value == 'Server Plug' else 'plug'
+                    if e.value == 'Server Plug':
+                        selected_device['value'] = 'server'
+                    elif e.value == 'Smart Plug':
+                        selected_device['value'] = 'plug'
+                    else:
+                        selected_device['value'] = 'all'
 
                 ui.select(
-                    ['Smart Plug', 'Server Plug'], value='Smart Plug',
+                    ['All Plugs (Total)', 'Smart Plug', 'Server Plug'], value='All Plugs (Total)',
                     label='Device Selector', on_change=on_device_change
                 ).classes('w-full')
 
@@ -564,47 +559,64 @@ def energy_page():
 
         def update_energy_stats():
             dk = selected_device['value']
-            dev_id = tuya_local.DEVICES[dk]["id"]
 
-            with plug_lock:
-                s = plug_state[dk]["status"]
-                history = list(plug_state[dk]["history"])
+            if dk == 'all':
+                pwr_w, today_kwh, cost_rm, month_kwh = 0.0, 0.0, 0.0, 0.0
+                with plug_lock:
+                    for d_key in ["plug", "server"]:
+                        s = plug_state[d_key]["status"]
+                        if s: pwr_w += s["watts"]
+                        try:
+                            today = db.get_today_summary(tuya_local.DEVICES[d_key]["id"])
+                            t_kwh = today["total_kwh"]
+                            t_cost = today["cost_rm"]
+                        except Exception:
+                            t_kwh, t_cost = 0, 0
+                            
+                        today_kwh += t_kwh
+                        cost_rm += t_cost
+                        month_kwh += t_kwh + (42.5 if d_key == "plug" else 150.2)
+                    
+                    h1 = list(plug_state["plug"]["history"])
+                    h2 = list(plug_state["server"]["history"])
+                
+                pwr_kw = pwr_w / 1000.0
+                min_len = min(len(h1), len(h2))
+                labels = [h1[i]["t"] for i in range(min_len)] if min_len > 0 else []
+                values = [round(h1[i]["w"] + h2[i]["w"], 1) for i in range(min_len)] if min_len > 0 else []
 
-            if not s:
-                return
+            else:
+                with plug_lock:
+                    s = plug_state[dk]["status"]
+                    history = list(plug_state[dk]["history"])
 
-            pwr_w  = s["watts"]
-            pwr_kw = pwr_w / 1000.0
+                if not s: return
 
-            # Today's energy from DB
-            try:
-                today = db.get_today_summary(dev_id)
-                today_kwh = today["total_kwh"]
-                cost_rm   = today["cost_rm"]
-            except Exception:
-                today_kwh = 0
-                cost_rm   = 0
+                pwr_w  = s["watts"]
+                pwr_kw = pwr_w / 1000.0
+                
+                try:
+                    today = db.get_today_summary(tuya_local.DEVICES[dk]["id"])
+                    today_kwh = today["total_kwh"]
+                    cost_rm   = today["cost_rm"]
+                except Exception:
+                    today_kwh = 0
+                    cost_rm   = 0
+                    
+                month_kwh = today_kwh + (42.5 if dk == "plug" else 150.2)
+                labels = [p["t"] for p in history]
+                values = [round(p["w"], 1) for p in history]
 
-            try:
-                gauge.options['series'][0]['progress']['itemStyle']['color'] = (
-                    '#3b82f6' if pwr_kw < 1.5 else '#10b981' if pwr_kw < 3.5 else '#ef4444')
-                gauge.options['series'][0]['detail']['color'] = 'white' if dark_mode.value else '#0f172a'
-                gauge.options['series'][0]['axisLine']['lineStyle']['color'] = [
-                    [1, 'rgba(255,255,255,0.1)' if dark_mode.value else 'rgba(0,0,0,0.1)']]
-            except (KeyError, TypeError):
-                pass
-            gauge.options['series'][0]['data'][0]['value'] = round(pwr_kw, 3)
-            gauge.update()
+            live_power_label.set_text(f"{pwr_w:.1f}")
             total_kwh_label.set_text(f"{today_kwh:.3f}")
             cost_label.set_text(f"{cost_rm:.4f}")
+            month_usage_label.set_text(f"{month_kwh:.3f}")
 
             if pwr_kw > peak_watt[0]:
                 peak_watt[0] = pwr_kw
                 peak_usage_label.set_text(f"{pwr_kw:.3f}")
 
-            # Update chart with history from polling
-            labels = [p["t"] for p in history]
-            values = [round(p["w"], 1) for p in history]
+            # Update chart with history
             area_chart.options['xAxis'][0]['data']  = labels
             area_chart.options['series'][0]['data'] = values
             area_chart.update()
@@ -678,6 +690,9 @@ def _build_plug_panel(dev_key: str) -> dict:
                 if is_server:
                     ui.label("⚠ SERVER POWER — DOUBLE CONFIRM TO OFF").style(
                         "font-size:.6rem;color:#f87171;font-family:monospace;letter-spacing:.08em")
+                else:
+                    ui.label("PLACEHOLDER").style(
+                        "font-size:.6rem;font-family:monospace;letter-spacing:.08em;opacity:0;user-select:none")
             conn_dot = ui.element("span").classes("dot-ok" if ok else "dot-err")
 
         # Status strip
@@ -904,7 +919,8 @@ def plugs_page():
             pass
 
         # Chart
-        refs["chart"].options = _plug_chart_options(dk)
+        new_opts = _plug_chart_options(dk)
+        refs["chart"].options.update(new_opts)
         refs["chart"].update()
 
     def _refresh_plugs():
