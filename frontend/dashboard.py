@@ -714,8 +714,14 @@ def _build_plug_panel(dev_key: str) -> dict:
                 ok_cmd = tuya_local.set_switch(dev_key, True)
                 if ok_cmd:
                     db.insert_state_change(dev_id, cfg["name"], True)
-                    ui.notify("✅ Turned ON", type="positive")
                     server_off_confirm["pending"] = False
+                    # Update button UI immediately
+                    toggle_btn.classes(remove="plug-toggle-on plug-toggle-off plug-toggle-warn").classes("plug-toggle-on")
+                    toggle_btn.set_text("● ON")
+                    if warn_ref:
+                        warn_ref.style("display:none")
+                    card_el.classes(add="plug-on")
+                    ui.notify("✅ Turned ON", type="positive")
                 else:
                     ui.notify("⚠ Command failed", type="warning")
                 return
@@ -733,8 +739,12 @@ def _build_plug_panel(dev_key: str) -> dict:
             if ok_cmd:
                 db.insert_state_change(dev_id, cfg["name"], False)
                 server_off_confirm["pending"] = False
+                # Update button UI immediately
+                toggle_btn.classes(remove="plug-toggle-on plug-toggle-off plug-toggle-warn").classes("plug-toggle-off")
+                toggle_btn.set_text("○ OFF")
                 if warn_ref:
                     warn_ref.style("display:none")
+                card_el.classes(remove="plug-on")
                 ui.notify("🔴 Turned OFF", type="negative")
             else:
                 ui.notify("⚠ Command failed", type="warning")

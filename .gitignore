@@ -33,3 +33,6 @@ venv/
 Thumbs.db
 gemini_cache.txt
 actions-runner/
+
+# Local Notes
+claude.md

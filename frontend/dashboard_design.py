@@ -677,8 +677,14 @@ def _build_plug_panel(dev_key: str) -> dict:
                 with plug_lock:
                     if plug_state[dev_key]["status"]:
                         plug_state[dev_key]["status"]["switch"] = True
-                ui.notify("✅ Turned ON (Mock)", type="positive")
                 server_off_confirm["pending"] = False
+                # Update button UI immediately
+                toggle_btn.classes(remove="plug-toggle-on plug-toggle-off plug-toggle-warn").classes("plug-toggle-on")
+                toggle_btn.set_text("● ON")
+                if warn_ref:
+                    warn_ref.style("display:none")
+                card_el.classes(add="plug-on")
+                ui.notify("✅ Turned ON (Mock)", type="positive")
                 return
 
             if is_server and not server_off_confirm["pending"]:
@@ -695,8 +701,12 @@ def _build_plug_panel(dev_key: str) -> dict:
                 if plug_state[dev_key]["status"]:
                     plug_state[dev_key]["status"]["switch"] = False
             server_off_confirm["pending"] = False
+            # Update button UI immediately
+            toggle_btn.classes(remove="plug-toggle-on plug-toggle-off plug-toggle-warn").classes("plug-toggle-off")
+            toggle_btn.set_text("○ OFF")
             if warn_ref:
                 warn_ref.style("display:none")
+            card_el.classes(remove="plug-on")
             ui.notify("🔴 Turned OFF (Mock)", type="negative")
 
         # Energy strip
