@@ -534,9 +534,17 @@ def energy_page():
                 ).classes('w-full')
 
         # ── Power history chart ──────────────────────────────────────────────
+        chart_filter = {'value': 'Live'}
         with ui.card().classes('glass-card p-4 sm:p-6 w-full'):
-            ui.label('Power Usage — Live').classes(
-                'text-sm font-bold text-slate-400 uppercase mb-4')
+            with ui.row().classes('w-full items-center justify-between mb-4'):
+                chart_title = ui.label('Power Usage — Live').classes('text-sm font-bold text-slate-400 uppercase')
+                
+                def on_filter_change(e):
+                    chart_filter['value'] = e.value
+                    chart_title.set_text(f'Power Usage — {e.value}')
+                    
+                ui.toggle(['Live', 'Day', 'Week', 'Month'], value='Live', on_change=on_filter_change).props('unelevated size=sm').classes('bg-slate-800/50 text-slate-400')
+
             area_chart = ui.echart({
                 'tooltip': {'trigger': 'axis'},
                 'legend':  {'data': ['Power (W)'], 'textStyle': {'color': '#94a3b8'}, 'top': 0, 'right': 0},
@@ -616,7 +624,48 @@ def energy_page():
                 peak_watt[0] = pwr_kw
                 peak_usage_label.set_text(f"{pwr_kw:.3f}")
 
-            # Update chart with history
+            # Update chart with history or mocked intervals
+            if chart_filter['value'] != 'Live':
+                from datetime import datetime
+                labels, values = [], []
+                
+                try:
+                    if chart_filter['value'] == 'Day':
+                        if dk == 'all':
+                            pts1 = db.get_hourly_history(tuya_local.DEVICES["plug"]["id"], 24)
+                            pts2 = db.get_hourly_history(tuya_local.DEVICES["server"]["id"], 24)
+                            d1 = {p["hour_str"]: p["kwh"] for p in pts1}
+                            d2 = {p["hour_str"]: p["kwh"] for p in pts2}
+                            all_hours = sorted(list(set(d1.keys()) | set(d2.keys())))
+                            pts = [{"hour_str": h, "kwh": d1.get(h, 0) + d2.get(h, 0)} for h in all_hours]
+                        else:
+                            pts = db.get_hourly_history(tuya_local.DEVICES[dk]["id"], 24)
+                        labels = [datetime.strptime(p["hour_str"], "%Y-%m-%d %H:%M:%S").strftime("%H:00") for p in pts]
+                        values = [round(p["kwh"], 3) for p in pts]
+                        area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
+                        area_chart.options['series'][0]['name'] = 'Energy (kWh)'
+
+                    elif chart_filter['value'] in ['Week', 'Month']:
+                        days_limit = 7 if chart_filter['value'] == 'Week' else 30
+                        if dk == 'all':
+                            pts1 = db.get_daily_history(tuya_local.DEVICES["plug"]["id"], days_limit)
+                            pts2 = db.get_daily_history(tuya_local.DEVICES["server"]["id"], days_limit)
+                            d1 = {str(p["date_str"]): p["kwh"] for p in pts1}
+                            d2 = {str(p["date_str"]): p["kwh"] for p in pts2}
+                            all_days = sorted(list(set(d1.keys()) | set(d2.keys())))
+                            pts = [{"date_str": d, "kwh": d1.get(d, 0) + d2.get(d, 0)} for d in all_days]
+                        else:
+                            pts = db.get_daily_history(tuya_local.DEVICES[dk]["id"], days_limit)
+                        labels = [datetime.strptime(str(p["date_str"]), "%Y-%m-%d").strftime("%b %d") for p in pts]
+                        values = [round(p["kwh"], 3) for p in pts]
+                        area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
+                        area_chart.options['series'][0]['name'] = 'Energy (kWh)'
+                except Exception as e:
+                    print(f"Chart error: {e}")
+            else:
+                area_chart.options['yAxis'][0]['name'] = 'Watts'
+                area_chart.options['series'][0]['name'] = 'Power (W)'
+
             area_chart.options['xAxis'][0]['data']  = labels
             area_chart.options['series'][0]['data'] = values
             area_chart.update()

@@ -502,9 +502,18 @@ def energy_page():
                 ).classes('w-full')
 
         # ── Power history chart ──────────────────────────────────────────────
+        chart_filter = {'value': 'Live'}
         with ui.card().classes('glass-card p-4 sm:p-6 w-full'):
-            ui.label('Power Usage — Live').classes(
-                'text-sm font-bold text-slate-400 uppercase mb-4')
+            with ui.row().classes('w-full items-center justify-between mb-4'):
+                chart_title = ui.label('Power Usage — Live').classes('text-sm font-bold text-slate-400 uppercase')
+                
+                def on_filter_change(e):
+                    chart_filter['value'] = e.value
+                    chart_title.set_text(f'Power Usage — {e.value}')
+                    # The timer loop will pick up the new filter value on its next tick
+                    
+                ui.toggle(['Live', 'Day', 'Week', 'Month'], value='Live', on_change=on_filter_change).props('unelevated size=sm').classes('bg-slate-800/50 text-slate-400')
+
             area_chart = ui.echart({
                 'tooltip': {'trigger': 'axis'},
                 'legend':  {'data': ['Power (W)'], 'textStyle': {'color': '#94a3b8'}, 'top': 0, 'right': 0},
@@ -572,7 +581,27 @@ def energy_page():
                 peak_watt[0] = pwr_kw
                 peak_usage_label.set_text(f"{pwr_kw:.3f}")
 
-            # Update chart with history
+            # Update chart with history or mocked intervals
+            if chart_filter['value'] != 'Live':
+                import random
+                from datetime import datetime, timedelta
+                n_points = 24 if chart_filter['value'] == 'Day' else 7 if chart_filter['value'] == 'Week' else 30
+                now = datetime.now()
+                
+                if chart_filter['value'] == 'Day':
+                    labels = [(now - timedelta(hours=i)).strftime("%H:00") for i in range(n_points)][::-1]
+                    values = [round(random.uniform(0.5, 3.5), 2) for _ in range(n_points)]
+                    area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
+                    area_chart.options['series'][0]['name'] = 'Energy (kWh)'
+                else:
+                    labels = [(now - timedelta(days=i)).strftime("%b %d") for i in range(n_points)][::-1]
+                    values = [round(random.uniform(10.0, 30.0), 2) for _ in range(n_points)]
+                    area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
+                    area_chart.options['series'][0]['name'] = 'Energy (kWh)'
+            else:
+                area_chart.options['yAxis'][0]['name'] = 'Watts'
+                area_chart.options['series'][0]['name'] = 'Power (W)'
+
             area_chart.options['xAxis'][0]['data']  = labels
             area_chart.options['series'][0]['data'] = values
             area_chart.update()

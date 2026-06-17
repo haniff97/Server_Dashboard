@@ -236,3 +236,38 @@ def get_monthly_history(device_id: str, months: int = 6) -> list:
         rows = cursor.fetchall()
         cursor.close()
     return list(reversed(rows))
+
+
+def get_hourly_history(device_id: str, hours: int = 24) -> list:
+    """Return hourly kWh summaries for the last N hours."""
+    with get_conn() as conn:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT 
+                DATE_FORMAT(polled_at, '%Y-%m-%d %H:00:00') as hour_str,
+                SUM(wh_delta) / 1000.0 as kwh
+            FROM plug_energy
+            WHERE device_id = %s AND polled_at >= NOW() - INTERVAL %s HOUR
+            GROUP BY hour_str
+            ORDER BY hour_str DESC
+            LIMIT %s
+        """, (device_id, hours, hours))
+        rows = cursor.fetchall()
+        cursor.close()
+    return list(reversed(rows))
+
+
+def get_daily_history(device_id: str, days: int = 30) -> list:
+    """Return daily kWh summaries for the last N days."""
+    with get_conn() as conn:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT date as date_str, total_wh / 1000.0 as kwh
+            FROM plug_daily_summary
+            WHERE device_id = %s AND date >= CURDATE() - INTERVAL %s DAY
+            ORDER BY date DESC
+            LIMIT %s
+        """, (device_id, days, days))
+        rows = cursor.fetchall()
+        cursor.close()
+    return list(reversed(rows))
