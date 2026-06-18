@@ -63,6 +63,7 @@ plug_state: Dict[str, Dict[str, Any]] = {
     "server": {"status": None, "ok": False, "history": deque(maxlen=120)},
 }
 plug_lock = threading.Lock()
+db_error_notified = False
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  SYSTEM HELPERS
@@ -578,9 +579,14 @@ def energy_page():
                             today = db.get_today_summary(tuya_local.DEVICES[d_key]["id"])
                             t_kwh = today["total_kwh"]
                             t_cost = today["cost_rm"]
+                            global db_error_notified
+                            db_error_notified = False
                         except Exception as e:
                             t_kwh, t_cost = 0, 0
-                            ui.notify(f"Database error: could not fetch energy data. Is MariaDB running?", type="negative")
+                            global db_error_notified
+                            if not db_error_notified:
+                                ui.notify(f"Database error: could not fetch energy data. Is MariaDB running?", type="negative")
+                                db_error_notified = True
                             print(f"[db error] get_today_summary failed: {e}")
                             
                         today_kwh += t_kwh
@@ -609,9 +615,16 @@ def energy_page():
                     today = db.get_today_summary(tuya_local.DEVICES[dk]["id"])
                     today_kwh = today["total_kwh"]
                     cost_rm   = today["cost_rm"]
-                except Exception:
+                    global db_error_notified
+                    db_error_notified = False
+                except Exception as e:
                     today_kwh = 0
                     cost_rm   = 0
+                    global db_error_notified
+                    if not db_error_notified:
+                        ui.notify(f"Database error: could not fetch energy data. Is MariaDB running?", type="negative")
+                        db_error_notified = True
+                    print(f"[db error] get_today_summary failed: {e}")
                     
                 month_kwh = today_kwh + (42.5 if dk == "plug" else 150.2)
                 labels = [p["t"] for p in history]
