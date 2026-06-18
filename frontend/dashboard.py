@@ -578,8 +578,10 @@ def energy_page():
                             today = db.get_today_summary(tuya_local.DEVICES[d_key]["id"])
                             t_kwh = today["total_kwh"]
                             t_cost = today["cost_rm"]
-                        except Exception:
+                        except Exception as e:
                             t_kwh, t_cost = 0, 0
+                            ui.notify(f"Database error: could not fetch energy data. Is MariaDB running?", type="negative")
+                            print(f"[db error] get_today_summary failed: {e}")
                             
                         today_kwh += t_kwh
                         cost_rm += t_cost
