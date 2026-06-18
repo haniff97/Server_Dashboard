@@ -192,49 +192,123 @@ def add_common_styles():
     ui.add_head_html('''
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-            body { font-family:'Inter',sans-serif; background:#f8fafc; color:#1e293b; transition:background-color .3s,color .3s; }
-            body.body--dark { background:#0f172a; color:#f8fafc; }
-            .glass-card { background:rgba(255,255,255,.7); backdrop-filter:blur(12px); border:1px solid rgba(0,0,0,.05); border-radius:16px; box-shadow:0 4px 6px -1px rgba(0,0,0,.05); transition:background-color .3s; }
-            body.body--dark .glass-card { background:rgba(30,41,59,.7); border:1px solid rgba(255,255,255,.1); }
-            .glass-header { background:rgba(255,255,255,.8); backdrop-filter:blur(8px); border-bottom:1px solid rgba(0,0,0,.05); }
-            body.body--dark .glass-header { background:rgba(15,23,42,.8); border-bottom:1px solid rgba(255,255,255,.05); }
+            
+            @keyframes mesh {
+                0% { background-position: 0% 50%; }
+                50% { background-position: 100% 50%; }
+                100% { background-position: 0% 50%; }
+            }
+
+            body { 
+                font-family: 'Inter', sans-serif; 
+                background: linear-gradient(-45deg, #ff9a9e, #fecfef, #a1c4fd, #c2e9fb);
+                background-size: 400% 400%;
+                animation: mesh 15s ease infinite;
+                color: #1e293b; 
+                transition: color .3s; 
+                min-height: 100vh;
+            }
+            body.body--dark { 
+                background: linear-gradient(-45deg, #1e0030, #360033, #0b8793, #001f3f);
+                background-size: 400% 400%;
+                animation: mesh 15s ease infinite;
+                color: #f8fafc; 
+            }
+            .glass-card { 
+                background: rgba(255, 255, 255, 0.45); 
+                backdrop-filter: blur(24px) saturate(180%); 
+                -webkit-backdrop-filter: blur(24px) saturate(180%);
+                border: 1px solid rgba(255, 255, 255, 0.6); 
+                border-radius: 28px; 
+                box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1); 
+                transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), border 0.3s; 
+            }
+            .glass-card:hover {
+                transform: translateY(-4px);
+                box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.15);
+                border: 1px solid rgba(255, 255, 255, 0.8);
+            }
+            body.body--dark .glass-card { 
+                background: rgba(15, 23, 42, 0.45); 
+                border: 1px solid rgba(255, 255, 255, 0.15); 
+                box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            }
+            body.body--dark .glass-card:hover {
+                border: 1px solid rgba(255, 255, 255, 0.3);
+            }
+            .glass-header { 
+                background: rgba(255, 255, 255, 0.4); 
+                backdrop-filter: blur(24px) saturate(180%); 
+                -webkit-backdrop-filter: blur(24px) saturate(180%);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.5); 
+            }
+            body.body--dark .glass-header { 
+                background: rgba(15, 23, 42, 0.4); 
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1); 
+            }
             .stat-value { font-family:monospace; font-size:1.5rem; font-weight:700; color:#10b981; }
             .stat-label { font-size:.75rem; color:#94a3b8; text-transform:uppercase; font-weight:600; letter-spacing:.05em; }
 
             /* Plug page styles */
-            .plug-card { background:rgba(30,41,59,.7); border:1px solid rgba(255,255,255,.1); border-radius:16px; overflow:hidden; transition:all .3s; }
-            .plug-card.plug-on { border-color:rgba(16,185,129,.4); box-shadow:0 0 24px rgba(16,185,129,.1); }
-            .plug-card.server-card { border-color:rgba(248,113,65,.25); }
-            .plug-card::before { content:''; display:block; height:3px; background:linear-gradient(90deg,#10b981,#3b82f6); opacity:0; transition:opacity .3s; }
+            .plug-card { background:rgba(30,41,59,.45); border:1px solid rgba(255,255,255,.15); border-radius:28px; overflow:hidden; transition:all .3s; }
+            .plug-card.plug-on { border-color:rgba(16,185,129,.5); box-shadow:0 0 30px rgba(16,185,129,.2); }
+            .plug-card.server-card { border-color:rgba(248,113,65,.3); }
+            .plug-card::before { content:''; display:block; height:4px; background:linear-gradient(90deg,#10b981,#3b82f6); opacity:0; transition:opacity .3s; }
             .plug-card.plug-on::before { opacity:1; }
 
-            .plug-stat-strip { display:flex; flex-wrap:wrap; gap:16px; align-items:center; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06); border-radius:12px; padding:14px 18px; }
+            .plug-stat-strip { display:flex; flex-wrap:wrap; gap:16px; align-items:center; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); border-radius:16px; padding:14px 18px; backdrop-filter: blur(10px); }
+            body.body--dark .plug-stat-strip { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); }
             .plug-stat-num { font-family:'Courier New',monospace; font-size:1.4rem; font-weight:700; line-height:1; }
-            .plug-stat-lbl { font-size:.6rem; color:#94a3b8; text-transform:uppercase; letter-spacing:.08em; margin-top:3px; }
-            .plug-sep { width:1px; height:36px; background:rgba(255,255,255,.1); }
+            .plug-stat-lbl { font-size:.6rem; color:#64748b; text-transform:uppercase; letter-spacing:.08em; margin-top:3px; font-weight: 600; }
+            body.body--dark .plug-stat-lbl { color:#94a3b8; }
+            .plug-sep { width:1px; height:36px; background:rgba(0,0,0,.1); }
+            body.body--dark .plug-sep { background:rgba(255,255,255,.1); }
 
-            .plug-toggle { width:100%; padding:12px 0!important; border-radius:10px!important; font-family:'Courier New',monospace!important; font-size:.82rem!important; letter-spacing:.08em!important; transition:all .2s!important; }
-            .plug-toggle-on  { background:#10b981!important; color:#04201a!important; }
-            .plug-toggle-off { background:rgba(255,255,255,.06)!important; color:#94a3b8!important; border:1px solid rgba(255,255,255,.1)!important; }
-            .plug-toggle-warn { background:#92400e!important; color:#fef3c7!important; }
+            .plug-toggle { width:100%; padding:14px 0!important; border-radius:14px!important; font-family:'Courier New',monospace!important; font-size:.85rem!important; letter-spacing:.08em!important; transition:all .3s cubic-bezier(0.25, 0.8, 0.25, 1)!important; }
+            .plug-toggle-on  { background:linear-gradient(135deg, #10b981, #059669)!important; color:#ffffff!important; box-shadow: 0 4px 15px rgba(16,185,129,0.3)!important;}
+            .plug-toggle-off { background:rgba(255,255,255,.2)!important; color:#475569!important; border:1px solid rgba(255,255,255,.3)!important; }
+            body.body--dark .plug-toggle-off { background:rgba(255,255,255,.08)!important; color:#94a3b8!important; border:1px solid rgba(255,255,255,.1)!important; }
+            .plug-toggle-warn { background:linear-gradient(135deg, #ef4444, #b91c1c)!important; color:#ffffff!important; box-shadow: 0 4px 15px rgba(239,68,68,0.3)!important;}
 
-            .plug-energy-row { display:flex; flex-wrap:wrap; gap:10px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06); border-radius:12px; padding:14px 18px; }
+            .plug-energy-row { display:flex; flex-wrap:wrap; gap:10px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); border-radius:16px; padding:14px 18px; backdrop-filter: blur(10px); }
+            body.body--dark .plug-energy-row { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); }
 
-            .plug-ctrl-btn { background:rgba(255,255,255,.04)!important; border:1px solid rgba(255,255,255,.1)!important; border-radius:9px!important; color:#dde3f0!important; font-family:'Courier New',monospace!important; font-size:.7rem!important; letter-spacing:.05em!important; padding:9px 10px!important; transition:all .2s!important; }
-            .plug-ctrl-btn:hover { border-color:#10b981!important; color:#10b981!important; }
+            .plug-ctrl-btn { background:rgba(255,255,255,.2)!important; border:1px solid rgba(255,255,255,.3)!important; border-radius:12px!important; color:#475569!important; font-family:'Courier New',monospace!important; font-size:.75rem!important; letter-spacing:.05em!important; padding:9px 10px!important; transition:all .2s!important; }
+            body.body--dark .plug-ctrl-btn { background:rgba(255,255,255,.08)!important; border:1px solid rgba(255,255,255,.1)!important; color:#dde3f0!important; }
+            .plug-ctrl-btn:hover { border-color:#10b981!important; color:#10b981!important; transform: scale(1.05); }
 
-            .plug-led-btn { background:rgba(255,255,255,.04)!important; border:1px solid rgba(255,255,255,.1)!important; border-radius:8px!important; color:#94a3b8!important; font-size:.68rem!important; padding:8px 6px!important; transition:all .2s!important; flex:1; min-width:70px; }
-            .plug-led-btn:hover { border-color:#f59e0b!important; color:#f59e0b!important; }
+            .plug-led-btn { background:rgba(255,255,255,.2)!important; border:1px solid rgba(255,255,255,.3)!important; border-radius:12px!important; color:#475569!important; font-size:.7rem!important; padding:8px 6px!important; transition:all .2s!important; flex:1; min-width:70px; }
+            body.body--dark .plug-led-btn { background:rgba(255,255,255,.08)!important; border:1px solid rgba(255,255,255,.1)!important; color:#94a3b8!important; }
+            .plug-led-btn:hover { border-color:#f59e0b!important; color:#f59e0b!important; transform: scale(1.05); }
 
-            .dot-ok  { width:8px;height:8px;border-radius:50%;background:#10b981;display:inline-block;animation:dotblink 2.4s infinite; }
-            .dot-err { width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block; }
+            .dot-ok  { width:10px;height:10px;border-radius:50%;background:#10b981;display:inline-block;animation:dotblink 2.4s infinite; box-shadow: 0 0 8px #10b981; }
+            .dot-err { width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block; box-shadow: 0 0 8px #ef4444; }
             @keyframes dotblink { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-            .plug-warn-banner { background:#7c2d12; border:1px solid #f87171; border-radius:10px; padding:12px 16px; margin-top:10px; font-family:monospace; font-size:.72rem; color:#fca5a5; display:none; }
+            .plug-warn-banner { background:rgba(239, 68, 68, 0.2); backdrop-filter: blur(10px); border:1px solid rgba(239, 68, 68, 0.5); border-radius:16px; padding:12px 16px; margin-top:10px; font-family:monospace; font-size:.75rem; color:#991b1b; display:none; }
+            body.body--dark .plug-warn-banner { background:rgba(124, 45, 18, 0.5); border:1px solid #f87171; color:#fca5a5; }
             .plug-warn-banner.visible { display:block; }
 
-            .plug-section-title { font-family:'Courier New',monospace; font-size:.68rem; letter-spacing:.1em; text-transform:uppercase; color:#94a3b8; margin-bottom:10px; }
-            .plug-inner-card { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06); border-radius:14px; padding:16px 18px; margin-top:12px; }
+            .plug-section-title { font-family:'Courier New',monospace; font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:#64748b; margin-bottom:10px; font-weight: bold; }
+            body.body--dark .plug-section-title { color:#94a3b8; }
+            
+            .plug-inner-card { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); border-radius:20px; padding:16px 18px; margin-top:12px; backdrop-filter: blur(10px); }
+            body.body--dark .plug-inner-card { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); }
+
+            /* Select & Dropdown styling */
+            .q-field--outlined .q-field__control { border-radius: 16px !important; }
+            .q-field--outlined .q-field__control:before { border: 1px solid rgba(255, 255, 255, 0.3) !important; background: rgba(255, 255, 255, 0.1) !important; backdrop-filter: blur(10px) !important; transition: all 0.3s; }
+            body.body--dark .q-field--outlined .q-field__control:before { border: 1px solid rgba(255, 255, 255, 0.1) !important; background: rgba(15, 23, 42, 0.3) !important; }
+            .q-field:hover .q-field__control:before { border-color: rgba(255, 255, 255, 0.6) !important; }
+            body.body--dark .q-field:hover .q-field__control:before { border-color: rgba(255, 255, 255, 0.3) !important; }
+            
+            .glass-menu { background: rgba(255, 255, 255, 0.6) !important; backdrop-filter: blur(20px) saturate(180%) !important; border: 1px solid rgba(255, 255, 255, 0.4) !important; border-radius: 16px !important; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1) !important; padding: 4px 0; }
+            body.body--dark .glass-menu { background: rgba(15, 23, 42, 0.7) !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; color: #f8fafc !important; }
+            .glass-menu .q-item { border-radius: 12px; margin: 2px 6px; transition: all 0.2s; }
+            .glass-menu .q-item:hover { background: rgba(255, 255, 255, 0.4) !important; }
+            body.body--dark .glass-menu .q-item:hover { background: rgba(255, 255, 255, 0.1) !important; }
+            .glass-menu .q-item--active { background: rgba(56, 189, 248, 0.2) !important; color: #0284c7 !important; font-weight: 600; }
+            body.body--dark .glass-menu .q-item--active { color: #38bdf8 !important; }
         </style>
     ''')
 
@@ -251,15 +325,15 @@ def nav_toggle(current: str):
         elif e.value == 'Plugs':
             ui.navigate.to('/plugs')
 
-    with ui.row().classes('w-full flex justify-center mt-2'):
+    with ui.row().classes('w-full flex justify-center mt-2 mb-4'):
         ui.toggle(
             ['Server', 'Energy', 'Plugs'], value=current,
             on_change=on_change
         ).props(
-            'unelevated text-color=slate-700 dark:text-color=white'
+            'unelevated rounded'
         ).classes(
-            'bg-slate-200 dark:bg-slate-800'
-        ).style('border-radius: 10px; overflow: hidden;')
+            'glass-card p-1 text-slate-800 dark:text-white shadow-lg'
+        ).style('border-radius: 20px; font-weight: 600;')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -275,7 +349,7 @@ def main_page():
 
     with ui.header().classes('glass-header items-center justify-between p-4 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
         with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto justify-center sm:justify-start mb-2 sm:mb-0'):
-            ui.icon('dashboard', size='md', color='primary')
+            ui.icon('dns', size='md', color='primary').classes('drop-shadow-md')
             ui.label('HOMELAB').classes('text-2xl font-bold tracking-tight text-slate-900 dark:text-white')
         
         with ui.row().classes('items-center justify-center sm:justify-end gap-4 z-10 w-full sm:w-auto mb-2 sm:mb-0'):
@@ -499,7 +573,7 @@ def energy_page():
                 ui.select(
                     ['All Plugs (Total)', 'Smart Plug', 'Server Plug'], value='All Plugs (Total)',
                     label='Device Selector', on_change=on_device_change
-                ).classes('w-full')
+                ).props('outlined rounded popup-content-class="glass-menu"').classes('w-full')
 
         # ── Power history chart ──────────────────────────────────────────────
         chart_filter = {'value': 'Live'}
@@ -515,23 +589,38 @@ def energy_page():
                 ui.toggle(['Live', 'Day', 'Week', 'Month'], value='Live', on_change=on_filter_change).props('unelevated size=sm').classes('bg-slate-800/50 text-slate-400')
 
             area_chart = ui.echart({
-                'tooltip': {'trigger': 'axis'},
+                'tooltip': {
+                    'trigger': 'axis',
+                    'backgroundColor': 'rgba(15, 23, 42, 0.6)',
+                    'borderColor': 'rgba(255, 255, 255, 0.2)',
+                    'textStyle': {'color': '#f8fafc', 'fontFamily': 'Inter'}
+                },
                 'legend':  {'data': ['Power (W)'], 'textStyle': {'color': '#94a3b8'}, 'top': 0, 'right': 0},
                 'grid':    {'left': '3%', 'right': '4%', 'bottom': '3%', 'containLabel': True},
                 'xAxis':   [{'type': 'category', 'boundaryGap': False, 'data': [],
-                             'axisLabel': {'color': '#94a3b8', 'rotate': 45}}],
+                             'axisLabel': {'color': '#94a3b8', 'rotate': 45},
+                             'splitLine': {'show': True, 'lineStyle': {'color': 'rgba(255,255,255,0.05)'}} }],
                 'yAxis':   [{'type': 'value', 'name': 'Watts',
                              'nameTextStyle': {'color': '#94a3b8'},
-                             'axisLabel': {'color': '#94a3b8'}}],
+                             'axisLabel': {'color': '#94a3b8'},
+                             'splitLine': {'show': True, 'lineStyle': {'color': 'rgba(255,255,255,0.05)'}} }],
                 'series':  [{'name': 'Power (W)', 'type': 'line', 'smooth': True,
+                             'lineStyle': {
+                                 'color': '#38bdf8',
+                                 'width': 3,
+                                 'shadowColor': 'rgba(56, 189, 248, 0.5)',
+                                 'shadowBlur': 10
+                             },
                              'areaStyle': {'color': {
                                  'type': 'linear', 'x': 0, 'y': 0, 'x2': 0, 'y2': 1,
                                  'colorStops': [
-                                     {'offset': 0, 'color': 'rgba(59,130,246,.4)'},
-                                     {'offset': 1, 'color': 'rgba(59,130,246,.02)'},
+                                     {'offset': 0, 'color': 'rgba(56, 189, 248, 0.4)'},
+                                     {'offset': 1, 'color': 'rgba(56, 189, 248, 0.0)'},
                                  ],
                              }},
-                             'itemStyle': {'color': '#3b82f6'}, 'data': []}],
+                             'itemStyle': {'color': '#38bdf8', 'borderColor': '#fff', 'borderWidth': 2},
+                             'symbolSize': 6,
+                             'data': []}],
             }).classes('w-full h-[300px]')
 
         def update_energy_stats():
