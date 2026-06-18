@@ -567,6 +567,7 @@ def energy_page():
             }).classes('w-full h-[300px]')
 
         def update_energy_stats():
+            global db_error_notified
             dk = selected_device['value']
 
             if dk == 'all':
@@ -579,11 +580,9 @@ def energy_page():
                             today = db.get_today_summary(tuya_local.DEVICES[d_key]["id"])
                             t_kwh = today["total_kwh"]
                             t_cost = today["cost_rm"]
-                            global db_error_notified
                             db_error_notified = False
                         except Exception as e:
                             t_kwh, t_cost = 0, 0
-                            global db_error_notified
                             if not db_error_notified:
                                 ui.notify(f"Database error: could not fetch energy data. Is MariaDB running?", type="negative")
                                 db_error_notified = True
@@ -615,12 +614,10 @@ def energy_page():
                     today = db.get_today_summary(tuya_local.DEVICES[dk]["id"])
                     today_kwh = today["total_kwh"]
                     cost_rm   = today["cost_rm"]
-                    global db_error_notified
                     db_error_notified = False
                 except Exception as e:
                     today_kwh = 0
                     cost_rm   = 0
-                    global db_error_notified
                     if not db_error_notified:
                         ui.notify(f"Database error: could not fetch energy data. Is MariaDB running?", type="negative")
                         db_error_notified = True
