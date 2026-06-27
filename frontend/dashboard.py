@@ -11,10 +11,6 @@ import subprocess
 import threading
 import time
 
-import tuya_local
-import db
-import aws_iot_publisher
-
 from collections import deque
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -33,7 +29,7 @@ if _project_root not in sys.path:
 
 import tuya_local
 import db
-
+import aws_iot_publisher
 # ─────────────────────────────────────────────────────────────────────────────
 #  PROMETHEUS
 # ─────────────────────────────────────────────────────────────────────────────
