@@ -10,6 +10,11 @@ import asyncio
 import subprocess
 import threading
 import time
+
+import tuya_local
+import db
+import aws_iot_publisher
+
 from collections import deque
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -17,6 +22,7 @@ from dotenv import load_dotenv
 
 from nicegui import ui, app
 from prometheus_api_client import PrometheusConnect
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Ensure project root is importable (tuya_local, db live in parent dir)
@@ -133,6 +139,9 @@ def plug_polling_loop():
 
                     # Store to MariaDB
                     try:
+                        # Publish to AWS IoT Core
+                        aws_iot_publisher.publish(dev_key, status, wh_delta)
+                        
                         db.insert_energy(
                             device_id=tuya_local.DEVICES[dev_key]["id"],
                             device_name=status["device_name"],
