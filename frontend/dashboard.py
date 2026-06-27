@@ -30,6 +30,7 @@ if _project_root not in sys.path:
 import tuya_local
 import db
 import aws_iot_publisher
+import cloud_db
 # ─────────────────────────────────────────────────────────────────────────────
 #  PROMETHEUS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1091,5 +1092,60 @@ def plugs_page():
 app.on_startup(lambda: asyncio.create_task(update_metrics()))
 app.on_startup(lambda: asyncio.create_task(update_ai_insights()))
 threading.Thread(target=plug_polling_loop, daemon=True).start()
+
+@ui.page('/cloud')
+async def cloud_page():
+    add_common_styles()
+
+    with ui.column().classes('w-full q-pa-md gap-6'):
+
+        ui.label('☁️ Cloud Monitor — AWS DynamoDB').classes('text-h4 text-bold q-mb-sm')
+
+        # ── Today's summary cards ──────────────────────────────────────────────
+        ui.label("Today's Summary").classes('text-h6 text-grey-4')
+        with ui.row().classes('w-full gap-4'):
+            for dev_key, dev_name in [('plug', 'Smart Plug'), ('server', 'Server Plug')]:
+                summary = cloud_db.get_today_summary(dev_key)
+                with ui.card().classes('flex-1 q-pa-md'):
+                    ui.label(dev_name).classes('text-subtitle1 text-bold q-mb-sm')
+                    with ui.grid(columns=2).classes('w-full gap-2'):
+                        for label, value in [
+                            ('Readings',   str(summary['readings'])),
+                            ('Total kWh',  f"{summary['total_kwh']:.5f}"),
+                            ('Avg Watts',  f"{summary['avg_watts']} W"),
+                            ('Peak Watts', f"{summary['peak_watts']} W"),
+                        ]:
+                            with ui.column().classes('gap-0'):
+                                ui.label(label).classes('text-caption text-grey-5')
+                                ui.label(value).classes('text-body1 text-bold')
+
+        ui.separator()
+
+        # ── Recent readings tables ─────────────────────────────────────────────
+        COLUMNS = [
+            {'name': 'ts', 'label': 'Timestamp',    'field': 'ts', 'align': 'left'},
+            {'name': 'w',  'label': 'Watts',         'field': 'w',  'align': 'right'},
+            {'name': 'v',  'label': 'Voltage (V)',   'field': 'v',  'align': 'right'},
+            {'name': 'ma', 'label': 'Current (mA)',  'field': 'ma', 'align': 'right'},
+            {'name': 'wh', 'label': 'Wh Δ',          'field': 'wh', 'align': 'right'},
+            {'name': 'sw', 'label': 'Switch',        'field': 'sw', 'align': 'center'},
+        ]
+
+        for dev_key, dev_name in [('plug', 'Smart Plug'), ('server', 'Server Plug')]:
+            ui.label(f'{dev_name} — Last 15 Readings').classes('text-h6 q-mt-sm')
+            readings = cloud_db.get_recent_readings(dev_key, limit=15)
+
+            if readings:
+                rows = [{
+                    'ts': r['timestamp'][:19].replace('T', ' '),
+                    'w':  float(r.get('watts', 0)),
+                    'v':  float(r.get('voltage', 0)),
+                    'ma': int(float(r.get('current_ma', 0))),
+                    'wh': round(float(r.get('wh_delta', 0)), 5),
+                    'sw': '🟢 ON' if r.get('switch') else '🔴 OFF',
+                } for r in readings]
+                ui.table(columns=COLUMNS, rows=rows, row_key='ts').classes('w-full')
+            else:
+                ui.label('No data available').classes('text-grey')
 
 ui.run(host='0.0.0.0', port=3000, title='Homelab Dashboard', reload=False, favicon='🏠')
