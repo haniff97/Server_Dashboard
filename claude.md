@@ -188,27 +188,7 @@ pip install tinytuya mysql-connector-python python-dotenv nicegui prometheus_cli
 ```env
 GEMINI_API_KEY=AIzaSyCpHqVpaEaVfHsxWMPX11XRhsQF_0LWaS4
 
-TELEGRAM_TOKEN=7974388286:AAHfo5YiYY1z4g7XbogZ-UG67MzriLpNkHg
-TELEGRAM_CHAT_ID=569894825
 
-TUYA_CLIENT_ID=uk9rat79w4wk8wmjep7m
-TUYA_CLIENT_SECRET=ac4550f840574520b6aa7ce3aae22faa
-TUYA_DEVICE_ID=a3f2f187ed028f5920seoc
-TUYA_REGION=sg
-
-PLUG_ID=a3f2f187ed028f5920seoc
-PLUG_IP=192.168.1.2
-PLUG_KEY=-rU&}hvPr8G#&!?s
-
-SERVER_PLUG_ID=a3a5ce31b84c12052bpneu
-SERVER_PLUG_IP=192.168.1.15
-SERVER_PLUG_KEY=h+h.yxZD/'sNo|5|
-
-DB_HOST=172.19.0.2
-DB_PORT=3306
-DB_USER=serverdashboard
-DB_PASSWORD=Hnff9710!
-DB_NAME=homelab
 ```
 
 ---
@@ -320,3 +300,46 @@ Storage flow: `watts → Wh delta (per poll) → kWh (daily) → RM cost`
 - [ ] Assign static IP to smart plugs via router DHCP reservation (prevent IP changes)
 - [ ] Test double-confirm OFF on server plug
 - [ ] Verify wattage readings with something plugged in
+
+# UI Overhaul & SPA Refactor — Session 3 Handoff
+
+## What Was Done This Session
+
+### 1. Modern Flat/Glass UI Redesign
+- Redesigned the entire dashboard aesthetics utilizing modern, premium design trends.
+- Replaced the old dark-mode heavy cards with clean `glass-card` elements featuring subtle borders, dynamic shadows, and hover micro-animations.
+- Implemented a vibrant gradient mesh background for a more dynamic and engaging feel, later tuned to a sleek `#F4F4F5` light mode and pure `#000000` dark mode based on user preference.
+- Upgraded typography to `Inter` for a more polished look.
+- Enhanced the "Smart Plugs" toggle buttons with vivid colors (Crimson Red, Lime Green, Orange) to quickly convey device state.
+
+### 2. Single Page Application (SPA) Migration
+- Converted the multi-page routing (`/`, `/energy`, `/plugs`) into a unified Single Page Application (SPA).
+- Utilized NiceGUI's `ui.tab_panels` to instantly switch between the Server, Energy, and Plugs views without full page reloads.
+- **Benefit:** This resolved the "flicker" and lack of smooth transition between pages, and ensures that Dark Mode state and other global UI states persist seamlessly as the user navigates.
+
+### 3. Responsive Header & Navigation
+- Built a unified `glass-header` that stays fixed at the top of the viewport.
+- Re-engineered the layout to be fully mobile responsive (`flex-wrap sm:flex-nowrap`).
+- Positioned the segmented navigation control (`Server | Energy | Plugs`) directly in the center of the navbar for desktop, optimizing dead space.
+- Created adaptive layouts for mobile: on small screens, elements stack neatly, and the Dark Mode toggle snaps to the right edge at the same level as the "HOMELAB" title.
+
+---
+
+## Architecture: Dev (`dashboard_design.py`) vs Production (`dashboard.py`)
+
+During this session, we established a clean separation between UI prototyping and production deployment.
+
+### `frontend/dashboard_design.py` (Development / UI Sandbox)
+- **Purpose:** A lightweight, visual sandbox for rapid UI iteration.
+- **Key Differences:**
+  - **No Backend Dependencies:** It does NOT connect to MariaDB, Prometheus, or the Tuya LAN APIs.
+  - **Mock Data:** Uses hardcoded dummy data and simple Python timers (`ui.timer`) to simulate live updates (e.g., oscillating CPU bars, random wattages).
+  - **Fast Iteration:** Can be run locally on any machine without needing the complex PM2/Docker ecosystem, making it perfect for tweaking CSS, Flexbox layouts, and color themes safely.
+
+### `frontend/dashboard.py` (Production / Live System)
+- **Purpose:** The actual live, functional homelab monitor.
+- **Key Differences:**
+  - **Live Integrations:** Actively polls real Tuya Smart Plugs over the local network using HMAC-SHA256 tokens, queries live Prometheus metrics, and reads/writes to the MariaDB container.
+  - **Background Threads:** Runs complex async loops (`update_metrics`, `plug_polling_loop`) to maintain high-frequency data streams.
+  - **Prometheus Exporter:** Hosts its own Prometheus HTTP server (Port 2000/2001) for external scraping.
+  - **Fragility:** Changes here can break live monitoring, which is why UI designs are prototyped in `dashboard_design.py` first and then surgically merged into this file (as done in this session).

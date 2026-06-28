@@ -231,175 +231,189 @@ async def update_ai_insights():
 def add_common_styles():
     ui.add_head_html('''
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
             
-            @keyframes mesh {
-                0% { background-position: 0% 50%; }
-                50% { background-position: 100% 50%; }
-                100% { background-position: 0% 50%; }
-            }
-
             body { 
                 font-family: 'Inter', sans-serif; 
-                background: linear-gradient(-45deg, #ff9a9e, #fecfef, #a1c4fd, #c2e9fb);
-                background-size: 400% 400%;
-                animation: mesh 15s ease infinite;
-                color: #1e293b; 
-                transition: color .3s; 
+                background: #F4F4F5;
+                color: #111827; 
+                transition: background 0.3s, color 0.3s; 
                 min-height: 100vh;
             }
             body.body--dark { 
-                background: linear-gradient(-45deg, #1e0030, #360033, #0b8793, #001f3f);
-                background-size: 400% 400%;
-                animation: mesh 15s ease infinite;
-                color: #f8fafc; 
+                background: #000000;
+                color: #FFFFFF; 
             }
             .glass-card { 
-                background: rgba(255, 255, 255, 0.45); 
-                backdrop-filter: blur(24px) saturate(180%); 
-                -webkit-backdrop-filter: blur(24px) saturate(180%);
-                border: 1px solid rgba(255, 255, 255, 0.6); 
-                border-radius: 28px; 
-                box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1); 
-                transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), border 0.3s; 
+                background: #FFFFFF;
+                border: 1px solid rgba(0, 0, 0, 0.05); 
+                border-radius: 24px; 
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); 
+                transition: transform 0.2s ease, box-shadow 0.2s ease; 
             }
             .glass-card:hover {
-                transform: translateY(-4px);
-                box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.15);
-                border: 1px solid rgba(255, 255, 255, 0.8);
+                transform: translateY(-2px);
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06);
             }
             body.body--dark .glass-card { 
-                background: rgba(15, 23, 42, 0.45); 
-                border: 1px solid rgba(255, 255, 255, 0.15); 
-                box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+                background: #1A1A1A; 
+                border: none; 
+                box-shadow: none;
             }
             body.body--dark .glass-card:hover {
-                border: 1px solid rgba(255, 255, 255, 0.3);
+                transform: translateY(-2px);
             }
+            
+            .dark-highlight-card {
+                background: #0F172A;
+                color: #FFFFFF;
+                border-radius: 24px;
+                box-shadow: 0 10px 25px rgba(15, 23, 42, 0.2);
+            }
+            body.body--dark .dark-highlight-card {
+                background: #222222;
+                border: 1px solid rgba(255,255,255,0.05);
+                box-shadow: none;
+            }
+
+            .split-card {
+                border-radius: 24px;
+                overflow: hidden;
+                display: flex;
+                background: #FFFFFF;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+                border: 1px solid rgba(0, 0, 0, 0.05);
+            }
+            .split-left {
+                background: #E11D48;
+                color: #FFFFFF;
+                padding: 24px;
+                flex: 1;
+            }
+            .split-right {
+                background: #FFFFFF;
+                padding: 24px;
+                flex: 2;
+            }
+            body.body--dark .split-card {
+                background: #1A1A1A;
+                border: none;
+                box-shadow: none;
+            }
+            body.body--dark .split-left {
+                background: #222222;
+                color: #FFFFFF;
+            }
+            body.body--dark .split-right {
+                background: #1A1A1A;
+            }
+
             .glass-header { 
-                background: rgba(255, 255, 255, 0.4); 
-                backdrop-filter: blur(24px) saturate(180%); 
-                -webkit-backdrop-filter: blur(24px) saturate(180%);
-                border-bottom: 1px solid rgba(255, 255, 255, 0.5); 
+                background: rgba(244, 244, 245, 0.8); 
+                backdrop-filter: blur(16px); 
+                -webkit-backdrop-filter: blur(16px);
+                border-bottom: 1px solid rgba(0, 0, 0, 0.05); 
             }
             body.body--dark .glass-header { 
-                background: rgba(15, 23, 42, 0.4); 
+                background: rgba(0, 0, 0, 0.8); 
                 border-bottom: 1px solid rgba(255, 255, 255, 0.1); 
             }
-            .stat-value { font-family:monospace; font-size:1.5rem; font-weight:700; color:#10b981; }
-            .stat-label { font-size:.75rem; color:#94a3b8; text-transform:uppercase; font-weight:600; letter-spacing:.05em; }
+            
+            .stat-value { font-family:'Inter',sans-serif; font-size:1.5rem; font-weight:800; color:#E11D48; }
+            body.body--dark .stat-value { color: #39FF14; }
+            .stat-label { font-size:.75rem; color:#6B7280; text-transform:uppercase; font-weight:700; letter-spacing:.05em; }
+            body.body--dark .stat-label { color:#A1A1AA; }
 
             /* Plug page styles */
-            .plug-card { background:rgba(30,41,59,.45); border:1px solid rgba(255,255,255,.15); border-radius:28px; overflow:hidden; transition:all .3s; }
-            .plug-card.plug-on { border-color:rgba(16,185,129,.5); box-shadow:0 0 30px rgba(16,185,129,.2); }
-            .plug-card.server-card { border-color:rgba(248,113,65,.3); }
-            .plug-card::before { content:''; display:block; height:4px; background:linear-gradient(90deg,#10b981,#3b82f6); opacity:0; transition:opacity .3s; }
-            .plug-card.plug-on::before { opacity:1; }
+            .plug-card { background:#FFFFFF; border:1px solid rgba(0,0,0,.05); border-radius:24px; overflow:hidden; transition:all .3s; box-shadow: 0 4px 20px rgba(0,0,0,0.03); }
+            body.body--dark .plug-card { background:#1A1A1A; border:none; box-shadow:none; }
+            .plug-card.plug-on { border: 1px solid rgba(225, 29, 72, 0.3); box-shadow:0 0 20px rgba(225, 29, 72, 0.1); }
+            body.body--dark .plug-card.plug-on { border: 1px solid rgba(57, 255, 20, 0.3); box-shadow:none; }
+            
+            .plug-stat-strip { display:flex; flex-wrap:wrap; gap:16px; align-items:center; background:#F9FAFB; border-radius:16px; padding:14px 18px; }
+            body.body--dark .plug-stat-strip { background:#222222; border:none; }
+            
+            .plug-stat-num { font-family:'Inter',sans-serif; font-size:1.4rem; font-weight:800; line-height:1; color:#111827; }
+            body.body--dark .plug-stat-num { color:#FFFFFF; }
+            
+            .plug-stat-lbl { font-size:.6rem; color:#6B7280; text-transform:uppercase; letter-spacing:.08em; margin-top:3px; font-weight: 700; }
+            body.body--dark .plug-stat-lbl { color:#A1A1AA; }
+            
+            .plug-sep { width:1px; height:36px; background:rgba(0,0,0,.05); }
+            body.body--dark .plug-sep { background:rgba(255,255,255,.05); }
 
-            .plug-stat-strip { display:flex; flex-wrap:wrap; gap:16px; align-items:center; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); border-radius:16px; padding:14px 18px; backdrop-filter: blur(10px); }
-            body.body--dark .plug-stat-strip { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); }
-            .plug-stat-num { font-family:'Courier New',monospace; font-size:1.4rem; font-weight:700; line-height:1; }
-            .plug-stat-lbl { font-size:.6rem; color:#64748b; text-transform:uppercase; letter-spacing:.08em; margin-top:3px; font-weight: 600; }
-            body.body--dark .plug-stat-lbl { color:#94a3b8; }
-            .plug-sep { width:1px; height:36px; background:rgba(0,0,0,.1); }
-            body.body--dark .plug-sep { background:rgba(255,255,255,.1); }
+            .plug-toggle { width:100%; padding:14px 0!important; border-radius:999px!important; font-family:'Inter',sans-serif!important; font-size:.85rem!important; font-weight:700!important; letter-spacing:.05em!important; transition:all .3s ease!important; border:none!important;}
+            .plug-toggle-on  { background:#E11D48!important; color:#ffffff!important; box-shadow: 0 4px 15px rgba(225, 29, 72, 0.2)!important;}
+            body.body--dark .plug-toggle-on { background:#39FF14!important; color:#000000!important; box-shadow: none!important; }
+            .plug-toggle-off { background:#F3F4F6!important; color:#4B5563!important; }
+            body.body--dark .plug-toggle-off { background:#222222!important; color:#A1A1AA!important; }
+            .plug-toggle-warn { background:#FF5E00!important; color:#ffffff!important; box-shadow: 0 4px 15px rgba(255, 94, 0, 0.3)!important;}
+            body.body--dark .plug-toggle-warn { background:#FF5E00!important; color:#000000!important; box-shadow: none!important; }
 
-            .plug-toggle { width:100%; padding:14px 0!important; border-radius:14px!important; font-family:'Courier New',monospace!important; font-size:.85rem!important; letter-spacing:.08em!important; transition:all .3s cubic-bezier(0.25, 0.8, 0.25, 1)!important; }
-            .plug-toggle-on  { background:linear-gradient(135deg, #10b981, #059669)!important; color:#ffffff!important; box-shadow: 0 4px 15px rgba(16,185,129,0.3)!important;}
-            .plug-toggle-off { background:rgba(255,255,255,.2)!important; color:#475569!important; border:1px solid rgba(255,255,255,.3)!important; }
-            body.body--dark .plug-toggle-off { background:rgba(255,255,255,.08)!important; color:#94a3b8!important; border:1px solid rgba(255,255,255,.1)!important; }
-            .plug-toggle-warn { background:linear-gradient(135deg, #ef4444, #b91c1c)!important; color:#ffffff!important; box-shadow: 0 4px 15px rgba(239,68,68,0.3)!important;}
+            .plug-energy-row { display:flex; flex-wrap:wrap; gap:10px; background:#F9FAFB; border-radius:16px; padding:14px 18px; }
+            body.body--dark .plug-energy-row { background:#222222; }
 
-            .plug-energy-row { display:flex; flex-wrap:wrap; gap:10px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); border-radius:16px; padding:14px 18px; backdrop-filter: blur(10px); }
-            body.body--dark .plug-energy-row { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); }
+            .plug-ctrl-btn { background:#F3F4F6!important; border:none!important; border-radius:999px!important; color:#4B5563!important; font-family:'Inter',sans-serif!important; font-weight:600!important; font-size:.75rem!important; padding:9px 16px!important; transition:all .2s!important; }
+            body.body--dark .plug-ctrl-btn { background:#222222!important; color:#E5E7EB!important; }
+            .plug-ctrl-btn:hover { background:#E5E7EB!important; color:#111827!important; }
+            body.body--dark .plug-ctrl-btn:hover { background:#333333!important; color:#FFFFFF!important; }
 
-            .plug-ctrl-btn { background:rgba(255,255,255,.2)!important; border:1px solid rgba(255,255,255,.3)!important; border-radius:12px!important; color:#475569!important; font-family:'Courier New',monospace!important; font-size:.75rem!important; letter-spacing:.05em!important; padding:9px 10px!important; transition:all .2s!important; }
-            body.body--dark .plug-ctrl-btn { background:rgba(255,255,255,.08)!important; border:1px solid rgba(255,255,255,.1)!important; color:#dde3f0!important; }
-            .plug-ctrl-btn:hover { border-color:#10b981!important; color:#10b981!important; transform: scale(1.05); }
+            .plug-led-btn { background:#F3F4F6!important; border:none!important; border-radius:999px!important; color:#4B5563!important; font-weight:600!important; font-size:.7rem!important; padding:8px 12px!important; transition:all .2s!important; flex:1; min-width:70px; }
+            body.body--dark .plug-led-btn { background:#222222!important; color:#A1A1AA!important; }
+            .plug-led-btn:hover { background:#E5E7EB!important; color:#111827!important; }
+            body.body--dark .plug-led-btn:hover { background:#333333!important; color:#FFFFFF!important; }
 
-            .plug-led-btn { background:rgba(255,255,255,.2)!important; border:1px solid rgba(255,255,255,.3)!important; border-radius:12px!important; color:#475569!important; font-size:.7rem!important; padding:8px 6px!important; transition:all .2s!important; flex:1; min-width:70px; }
-            body.body--dark .plug-led-btn { background:rgba(255,255,255,.08)!important; border:1px solid rgba(255,255,255,.1)!important; color:#94a3b8!important; }
-            .plug-led-btn:hover { border-color:#f59e0b!important; color:#f59e0b!important; transform: scale(1.05); }
+            .dot-ok  { width:10px;height:10px;border-radius:50%;background:#E11D48;display:inline-block; }
+            body.body--dark .dot-ok { background:#39FF14; }
+            .dot-err { width:10px;height:10px;border-radius:50%;background:#F87171;display:inline-block; }
+            body.body--dark .dot-err { background:#FF5E00; }
 
-            .dot-ok  { width:10px;height:10px;border-radius:50%;background:#10b981;display:inline-block;animation:dotblink 2.4s infinite; box-shadow: 0 0 8px #10b981; }
-            .dot-err { width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block; box-shadow: 0 0 8px #ef4444; }
-            @keyframes dotblink { 0%,100%{opacity:1} 50%{opacity:.3} }
-
-            .plug-warn-banner { background:rgba(239, 68, 68, 0.2); backdrop-filter: blur(10px); border:1px solid rgba(239, 68, 68, 0.5); border-radius:16px; padding:12px 16px; margin-top:10px; font-family:monospace; font-size:.75rem; color:#991b1b; display:none; }
-            body.body--dark .plug-warn-banner { background:rgba(124, 45, 18, 0.5); border:1px solid #f87171; color:#fca5a5; }
+            .plug-warn-banner { background:#FEF2F2; border-radius:16px; padding:12px 16px; margin-top:10px; font-family:'Inter',sans-serif; font-size:.75rem; color:#991B1B; font-weight:500; display:none; }
+            body.body--dark .plug-warn-banner { background:#431407; color:#FFEDD5; }
             .plug-warn-banner.visible { display:block; }
 
-            .plug-section-title { font-family:'Courier New',monospace; font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:#64748b; margin-bottom:10px; font-weight: bold; }
-            body.body--dark .plug-section-title { color:#94a3b8; }
+            .plug-section-title { font-family:'Inter',sans-serif; font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:#6B7280; margin-bottom:10px; font-weight: 700; }
+            body.body--dark .plug-section-title { color:#A1A1AA; }
             
-            .plug-inner-card { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); border-radius:20px; padding:16px 18px; margin-top:12px; backdrop-filter: blur(10px); }
-            body.body--dark .plug-inner-card { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); }
+            .plug-inner-card { background:#F9FAFB; border-radius:20px; padding:16px 18px; margin-top:12px; }
+            body.body--dark .plug-inner-card { background:#222222; }
 
             /* Select & Dropdown styling */
-            .q-field--outlined .q-field__control { border-radius: 16px !important; }
-            .q-field--outlined .q-field__control:before { border: 1px solid rgba(255, 255, 255, 0.3) !important; background: rgba(255, 255, 255, 0.1) !important; backdrop-filter: blur(10px) !important; transition: all 0.3s; }
-            body.body--dark .q-field--outlined .q-field__control:before { border: 1px solid rgba(255, 255, 255, 0.1) !important; background: rgba(15, 23, 42, 0.3) !important; }
-            .q-field:hover .q-field__control:before { border-color: rgba(255, 255, 255, 0.6) !important; }
-            body.body--dark .q-field:hover .q-field__control:before { border-color: rgba(255, 255, 255, 0.3) !important; }
+            .q-field--outlined .q-field__control { border-radius: 999px !important; }
+            .q-field--outlined .q-field__control:before { border: 1px solid rgba(0, 0, 0, 0.1) !important; background: #FFFFFF !important; transition: all 0.3s; }
+            body.body--dark .q-field--outlined .q-field__control:before { border: none !important; background: #222222 !important; }
+            .q-field:hover .q-field__control:before { border-color: rgba(0, 0, 0, 0.2) !important; }
+            body.body--dark .q-field:hover .q-field__control:before { background: #2A2A2A !important; }
             
-            .glass-menu { background: rgba(255, 255, 255, 0.6) !important; backdrop-filter: blur(20px) saturate(180%) !important; border: 1px solid rgba(255, 255, 255, 0.4) !important; border-radius: 16px !important; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1) !important; padding: 4px 0; }
-            body.body--dark .glass-menu { background: rgba(15, 23, 42, 0.7) !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; color: #f8fafc !important; }
+            .glass-menu { background: #FFFFFF !important; border: 1px solid rgba(0, 0, 0, 0.05) !important; border-radius: 16px !important; box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important; padding: 4px 0; }
+            body.body--dark .glass-menu { background: #1A1A1A !important; border: 1px solid rgba(255,255,255,0.05) !important; color: #FFFFFF !important; box-shadow: 0 10px 25px rgba(0,0,0,0.5) !important;}
             .glass-menu .q-item { border-radius: 12px; margin: 2px 6px; transition: all 0.2s; }
-            .glass-menu .q-item:hover { background: rgba(255, 255, 255, 0.4) !important; }
-            body.body--dark .glass-menu .q-item:hover { background: rgba(255, 255, 255, 0.1) !important; }
-            .glass-menu .q-item--active { background: rgba(56, 189, 248, 0.2) !important; color: #0284c7 !important; font-weight: 600; }
-            body.body--dark .glass-menu .q-item--active { color: #38bdf8 !important; }
+            .glass-menu .q-item:hover { background: #F3F4F6 !important; }
+            body.body--dark .glass-menu .q-item:hover { background: #222222 !important; }
+            .glass-menu .q-item--active { background: #E11D48 !important; color: #FFFFFF !important; font-weight: 600; }
+            body.body--dark .glass-menu .q-item--active { background: #39FF14 !important; color: #000000 !important; }
+
+            /* Active Toggle for navigation */
+            .q-btn-group { border-radius: 999px !important; background: #F3F4F6 !important; padding: 4px; box-shadow: none !important; border: 1px solid rgba(0,0,0,0.05) !important; }
+            body.body--dark .q-btn-group { background: #1A1A1A !important; border: none !important; }
+            .q-btn-group .q-btn { border-radius: 999px !important; font-weight: 600 !important; color: #6B7280 !important; }
+            body.body--dark .q-btn-group .q-btn { color: #A1A1AA !important; }
+            .q-btn-group .q-btn.bg-primary { background: #0F172A !important; color: #FFFFFF !important; }
+            body.body--dark .q-btn-group .q-btn.bg-primary { background: #333333 !important; color: #FFFFFF !important; border: 1px solid rgba(255,255,255,0.1) !important; }
         </style>
     ''')
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  NAV TOGGLE HELPER
+#  (nav_toggle removed, using index_page SPA toggle instead)
 # ─────────────────────────────────────────────────────────────────────────────
-def nav_toggle(current: str):
-    """Render the 3-tab navigation toggle."""
-    def on_change(e):
-        if e.value == 'Server':
-            ui.navigate.to('/')
-        elif e.value == 'Energy':
-            ui.navigate.to('/energy')
-        elif e.value == 'Plugs':
-            ui.navigate.to('/plugs')
-
-    with ui.row().classes('w-full flex justify-center mt-2 mb-4'):
-        ui.toggle(
-            ['Server', 'Energy', 'Plugs'], value=current,
-            on_change=on_change
-        ).props(
-            'unelevated rounded'
-        ).classes(
-            'glass-card p-1 text-slate-800 dark:text-white shadow-lg'
-        ).style('border-radius: 20px; font-weight: 600;')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  PAGE 1 — SERVER  /
+#  TAB 1 — SERVER
 # ─────────────────────────────────────────────────────────────────────────────
-@ui.page('/')
-def main_page():
-    dark_mode = ui.dark_mode()
-    dark_mode.enable()
-    add_common_styles()
-    ui.colors(primary='#3b82f6', secondary='#8b5cf6', accent='#ec4899',
-              positive='#10b981', warning='#f59e0b')
+def render_server_content():
+    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-16 sm:mt-20 gap-4 sm:gap-8'):
 
-    with ui.header().classes('glass-header items-center justify-between p-4 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
-        with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto justify-center sm:justify-start mb-2 sm:mb-0'):
-            ui.icon('dns', size='md', color='primary').classes('drop-shadow-md')
-            ui.label('HOMELAB').classes('text-2xl font-bold tracking-tight text-slate-900 dark:text-white')
-        
-        with ui.row().classes('items-center justify-center sm:justify-end gap-4 z-10 w-full sm:w-auto mb-2 sm:mb-0'):
-            with ui.row().classes('items-center gap-2 bg-slate-200 dark:bg-slate-800 rounded-full px-3 py-1'):
-                ui.icon('schedule', size='xs', color='gray-400')
-                ui.label().bind_text_from(globals(), 'last_update').classes('text-sm text-slate-600 dark:text-gray-300 font-mono')
-            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
-
-    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-0 gap-4 sm:gap-8'):
-        nav_toggle('Server')
 
         with ui.row().classes('items-center gap-2 mb-2'):
             ui.icon('analytics', color='primary')
@@ -531,30 +545,15 @@ def main_page():
                         'text-slate-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed')
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  PAGE 2 — ENERGY  /energy
 # ─────────────────────────────────────────────────────────────────────────────
-@ui.page('/energy')
-def energy_page():
-    dark_mode = ui.dark_mode()
-    dark_mode.enable()
-    add_common_styles()
-    ui.colors(primary='#3b82f6', secondary='#8b5cf6', accent='#ec4899',
-              positive='#10b981', warning='#f59e0b')
-
+#  TAB 2 — ENERGY
+# ─────────────────────────────────────────────────────────────────────────────
+def render_energy_content():
     peak_watt = [0.0]
     selected_device = {'value': 'all'}  # default device for energy view
 
-    with ui.header().classes('glass-header items-center justify-between p-4 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
-        with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto justify-center sm:justify-start mb-2 sm:mb-0'):
-            ui.icon('bolt', size='md', color='warning')
-            ui.label('Energy').classes('text-2xl font-bold tracking-tight text-slate-900 dark:text-white')
-            
-        with ui.row().classes('items-center justify-center sm:justify-end gap-4 z-10 w-full sm:w-auto mb-2 sm:mb-0'):
-            ui.label('TNB Tariff Rate').classes('text-xs text-slate-500 bg-slate-800 px-3 py-1 rounded-full')
-            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
+    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-16 sm:mt-20 gap-4 sm:gap-6'):
 
-    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-0 gap-4 sm:gap-6'):
-        nav_toggle('Energy')
 
         with ui.grid().classes('w-full gap-4 sm:gap-6 grid-cols-1 md:grid-cols-3 items-stretch'):
 
@@ -1000,30 +999,12 @@ def _build_plug_panel(dev_key: str) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  PAGE 3 — PLUGS  /plugs
 # ─────────────────────────────────────────────────────────────────────────────
-@ui.page('/plugs')
-def plugs_page():
-    dark_mode = ui.dark_mode()
-    dark_mode.enable()
-    add_common_styles()
-    ui.colors(primary='#3b82f6', secondary='#8b5cf6', accent='#ec4899',
-              positive='#10b981', warning='#f59e0b')
+#  TAB 3 — PLUGS
+# ─────────────────────────────────────────────────────────────────────────────
+def render_plugs_content():
+    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-16 sm:mt-20 gap-4 sm:gap-6'):
 
-    with ui.header().classes('glass-header items-center justify-between p-4 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
-        with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto justify-center sm:justify-start mb-2 sm:mb-0'):
-            ui.icon('power', size='md', color='positive')
-            ui.label('Smart Plugs').classes('text-2xl font-bold tracking-tight text-slate-900 dark:text-white')
-
-        with ui.row().classes('items-center justify-center sm:justify-end gap-4 z-10 w-full sm:w-auto mb-2 sm:mb-0'):
-            ui.label('LOCAL LAN · TINYTUYA').classes(
-                'text-xs text-slate-500 bg-slate-800 px-3 py-1 rounded-full font-mono')
-            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes(
-                'text-slate-900 dark:text-white'
-            ).bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
-
-    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-0 gap-4 sm:gap-6'):
-        nav_toggle('Plugs')
 
         with ui.row().classes('items-center gap-2 mb-2'):
             ui.icon('electrical_services', color='positive')
@@ -1085,6 +1066,41 @@ def plugs_page():
 
     ui.timer(2.0, _refresh_plugs)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  MAIN SPA PAGE  /
+# ─────────────────────────────────────────────────────────────────────────────
+@ui.page('/')
+def index_page():
+    dark_mode = ui.dark_mode()
+    dark_mode.enable()
+    add_common_styles()
+    
+    with ui.header().classes('glass-header items-center justify-between p-3 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
+        with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto sm:flex-1 justify-center sm:justify-start relative'):
+            ui.icon('dns', size='md', color='primary').classes('drop-shadow-md')
+            ui.label('HOMELAB').classes('text-2xl font-bold tracking-tight text-slate-900 dark:text-white')
+            # Mobile-only dark mode button placed on the right edge
+            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('lt-sm absolute right-2 text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
+        
+        with ui.row().classes('items-center justify-center z-10 w-full sm:w-auto sm:flex-1 mt-3 sm:mt-0'):
+            toggle = ui.toggle(
+                ['Server', 'Energy', 'Plugs'], value='Server'
+            ).props('unelevated rounded').classes('q-btn-group').style('border-radius: 20px; font-weight: 600;')
+
+        with ui.row().classes('items-center justify-end gap-4 z-10 gt-xs sm:flex-1'):
+            with ui.row().classes('items-center gap-2 bg-slate-200 dark:bg-slate-800 rounded-full px-3 py-1 gt-sm'):
+                ui.icon('schedule', size='xs', color='gray-400')
+                ui.label().bind_text_from(globals(), 'last_update').classes('text-sm text-slate-600 dark:text-gray-300 font-mono')
+            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
+
+    with ui.tab_panels(toggle, value='Server').classes('w-full bg-transparent p-0 mt-8'):
+        with ui.tab_panel('Server').classes('p-0'):
+            render_server_content()
+        with ui.tab_panel('Energy').classes('p-0'):
+            render_energy_content()
+        with ui.tab_panel('Plugs').classes('p-0'):
+            render_plugs_content()
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  STARTUP
