@@ -637,11 +637,17 @@ def render_energy_content():
         chart_filter = {'value': 'Live'}
         with ui.card().classes('glass-card p-4 sm:p-6 w-full'):
             with ui.row().classes('w-full items-center justify-between mb-4'):
-                chart_title = ui.label('Power Usage — Live').classes('text-sm font-bold text-slate-400 uppercase')
+                with ui.column().classes('gap-0'):
+                    chart_title = ui.label('Power Usage — Live').classes('text-sm font-bold text-slate-400 uppercase')
+                    chart_cost = ui.label('').classes('text-[10px] font-bold text-emerald-500 hidden')
                 
                 def on_filter_change(e):
                     chart_filter['value'] = e.value
                     chart_title.set_text(f'Power Usage — {e.value}')
+                    if e.value == 'Live':
+                        chart_cost.classes(add='hidden')
+                    else:
+                        chart_cost.classes(remove='hidden')
                     
                 ui.toggle(['Live', 'Day', 'Week', 'Month'], value='Live', on_change=on_filter_change).props('unelevated size=sm').classes('bg-slate-800/50 text-slate-400')
 
@@ -768,11 +774,15 @@ def render_energy_content():
                         values = [round(p["kwh"], 3) for p in pts]
                         area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
                         area_chart.options['series'][0]['name'] = 'Energy (kWh)'
+                        
+                    total_kwh = sum(values)
+                    chart_cost.set_text(f"EST. COST: RM {db.calculate_tnb_cost(total_kwh):.2f}")
                 except Exception as e:
                     print(f"Chart error: {e}")
             else:
                 area_chart.options['yAxis'][0]['name'] = 'Watts'
                 area_chart.options['series'][0]['name'] = 'Power (W)'
+                chart_cost.set_text("")
 
             area_chart.options['xAxis'][0]['data']  = labels
             area_chart.options['series'][0]['data'] = values
