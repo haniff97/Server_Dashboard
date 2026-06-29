@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from dotenv import load_dotenv
 
-from nicegui import ui, app
+from nicegui import ui, app, run
 from prometheus_api_client import PrometheusConnect
 
 
@@ -67,6 +67,15 @@ plug_state: Dict[str, Dict[str, Any]] = {
 }
 plug_lock = threading.Lock()
 db_error_notified = False
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  GLOBAL STATE — Energy DB cache (avoids blocking UI timers with DB queries)
+# ─────────────────────────────────────────────────────────────────────────────
+energy_cache: Dict[str, dict] = {
+    "plug":   {"total_kwh": 0, "cost_rm": 0},
+    "server": {"total_kwh": 0, "cost_rm": 0},
+}
+energy_cache_lock = threading.Lock()
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  SYSTEM HELPERS
@@ -158,54 +167,65 @@ def plug_polling_loop():
 # ─────────────────────────────────────────────────────────────────────────────
 #  SYSTEM METRICS LOOP
 # ─────────────────────────────────────────────────────────────────────────────
+def _fetch_all_metrics() -> dict:
+    """Pure sync function — runs in thread pool via run.io_bound(), never blocks event loop."""
+    stats = {}
+    iot = {}
+
+    cpu_q = prom.custom_query(
+        query='100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)')
+    stats['cpu_percent'] = round(float(cpu_q[0]['value'][1]), 1) if cpu_q else 0
+    stats['cpu_temp']    = get_cpu_temp()
+
+    mem_used  = prom.custom_query(query='node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes')
+    mem_total = prom.custom_query(query='node_memory_MemTotal_bytes')
+    if mem_used and mem_total:
+        stats['memory_used_gb']  = round(float(mem_used[0]['value'][1]) / (1024**3), 2)
+        stats['memory_total_gb'] = round(float(mem_total[0]['value'][1]) / (1024**3), 2)
+        stats['memory_percent']  = round(
+            stats['memory_used_gb'] / stats['memory_total_gb'] * 100, 1)
+
+    nvme_used  = prom.custom_query(query='node_filesystem_size_bytes{mountpoint="/mnt/nvme"} - node_filesystem_avail_bytes{mountpoint="/mnt/nvme"}')
+    nvme_total = prom.custom_query(query='node_filesystem_size_bytes{mountpoint="/mnt/nvme"}')
+    if nvme_used and nvme_total:
+        stats['nvme_used_gb']  = round(float(nvme_used[0]['value'][1]) / (1024**3), 1)
+        stats['nvme_total_gb'] = round(float(nvme_total[0]['value'][1]) / (1024**3), 1)
+        stats['nvme_percent']  = round(
+            stats['nvme_used_gb'] / stats['nvme_total_gb'] * 100, 1)
+    stats['nvme_temp'] = get_nvme_temp()
+
+    hdd_used  = prom.custom_query(query='node_filesystem_size_bytes{mountpoint="/mnt/hdd-public"} - node_filesystem_avail_bytes{mountpoint="/mnt/hdd-public"}')
+    hdd_total = prom.custom_query(query='node_filesystem_size_bytes{mountpoint="/mnt/hdd-public"}')
+    if hdd_used and hdd_total:
+        stats['hdd_used_gb']  = round(float(hdd_used[0]['value'][1]) / (1024**3), 1)
+        stats['hdd_total_gb'] = round(float(hdd_total[0]['value'][1]) / (1024**3), 1)
+        stats['hdd_percent']  = round(
+            stats['hdd_used_gb'] / stats['hdd_total_gb'] * 100, 1)
+    stats['hdd_status'] = get_hdd_status()
+
+    esp32_temps    = prom.custom_query(query='esp32_temperature_celsius')
+    esp32_humidity = prom.custom_query(query='esp32_humidity_percent')
+    for metric in esp32_temps:
+        did = metric['metric']['device_id']
+        iot.setdefault(did, {})['temperature'] = round(float(metric['value'][1]), 1)
+    for metric in esp32_humidity:
+        did = metric['metric']['device_id']
+        iot.setdefault(did, {})['humidity'] = round(float(metric['value'][1]), 1)
+
+    return {'system': stats, 'iot': iot}
+
+
 async def update_metrics():
     while True:
         global system_stats, iot_devices, last_update
         try:
-            cpu_q = prom.custom_query(
-                query='100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)')
-            system_stats['cpu_percent'] = round(float(cpu_q[0]['value'][1]), 1) if cpu_q else 0
-            system_stats['cpu_temp']    = get_cpu_temp()
-
-            mem_used  = prom.custom_query(query='node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes')
-            mem_total = prom.custom_query(query='node_memory_MemTotal_bytes')
-            if mem_used and mem_total:
-                system_stats['memory_used_gb']  = round(float(mem_used[0]['value'][1]) / (1024**3), 2)
-                system_stats['memory_total_gb'] = round(float(mem_total[0]['value'][1]) / (1024**3), 2)
-                system_stats['memory_percent']  = round(
-                    system_stats['memory_used_gb'] / system_stats['memory_total_gb'] * 100, 1)
-
-            nvme_used  = prom.custom_query(query='node_filesystem_size_bytes{mountpoint="/mnt/nvme"} - node_filesystem_avail_bytes{mountpoint="/mnt/nvme"}')
-            nvme_total = prom.custom_query(query='node_filesystem_size_bytes{mountpoint="/mnt/nvme"}')
-            if nvme_used and nvme_total:
-                system_stats['nvme_used_gb']  = round(float(nvme_used[0]['value'][1]) / (1024**3), 1)
-                system_stats['nvme_total_gb'] = round(float(nvme_total[0]['value'][1]) / (1024**3), 1)
-                system_stats['nvme_percent']  = round(
-                    system_stats['nvme_used_gb'] / system_stats['nvme_total_gb'] * 100, 1)
-            system_stats['nvme_temp'] = get_nvme_temp()
-
-            hdd_used  = prom.custom_query(query='node_filesystem_size_bytes{mountpoint="/mnt/hdd-public"} - node_filesystem_avail_bytes{mountpoint="/mnt/hdd-public"}')
-            hdd_total = prom.custom_query(query='node_filesystem_size_bytes{mountpoint="/mnt/hdd-public"}')
-            if hdd_used and hdd_total:
-                system_stats['hdd_used_gb']  = round(float(hdd_used[0]['value'][1]) / (1024**3), 1)
-                system_stats['hdd_total_gb'] = round(float(hdd_total[0]['value'][1]) / (1024**3), 1)
-                system_stats['hdd_percent']  = round(
-                    system_stats['hdd_used_gb'] / system_stats['hdd_total_gb'] * 100, 1)
-            system_stats['hdd_status'] = get_hdd_status()
-
-            esp32_temps    = prom.custom_query(query='esp32_temperature_celsius')
-            esp32_humidity = prom.custom_query(query='esp32_humidity_percent')
-            for metric in esp32_temps:
-                did = metric['metric']['device_id']
-                iot_devices.setdefault(did, {})['temperature'] = round(float(metric['value'][1]), 1)
-            for metric in esp32_humidity:
-                did = metric['metric']['device_id']
-                iot_devices.setdefault(did, {})['humidity'] = round(float(metric['value'][1]), 1)
-
+            result = await run.io_bound(_fetch_all_metrics)
+            system_stats.update(result['system'])
+            iot_devices.update(result['iot'])
             last_update = datetime.now().strftime("%H:%M:%S")
         except Exception as e:
             print(f"❌ Metrics error: {e}")
-        await asyncio.sleep(5)
+        await asyncio.sleep(7)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  AI INSIGHTS LOOP
@@ -532,7 +552,7 @@ def render_server_content():
                         else:
                             ui.label('No data').classes('text-sm text-slate-500 mt-auto')
 
-        ui.timer(5.0, update_iot_display)
+        ui.timer(6.0, update_iot_display)
 
         with ui.card().classes(
             'glass-card w-full p-4 sm:p-6 mt-2 sm:mt-4 bg-slate-200/50 dark:bg-slate-800/50 '
@@ -660,8 +680,7 @@ def render_energy_content():
                              'data': []}],
             }).classes('w-full h-[300px]')
 
-        def update_energy_stats():
-            global db_error_notified
+        async def update_energy_stats():
             dk = selected_device['value']
 
             if dk == 'all':
@@ -670,24 +689,15 @@ def render_energy_content():
                     for d_key in ["plug", "server"]:
                         s = plug_state[d_key]["status"]
                         if s: pwr_w += s["watts"]
-                        try:
-                            today = db.get_today_summary(tuya_local.DEVICES[d_key]["id"])
-                            t_kwh = today["total_kwh"]
-                            t_cost = today["cost_rm"]
-                            db_error_notified = False
-                        except Exception as e:
-                            t_kwh, t_cost = 0, 0
-                            if not db_error_notified:
-                                ui.notify(f"Database error: could not fetch energy data. Is MariaDB running?", type="negative")
-                                db_error_notified = True
-                            print(f"[db error] get_today_summary failed: {e}")
-                            
-                        today_kwh += t_kwh
-                        cost_rm += t_cost
-                        month_kwh += t_kwh + (42.5 if d_key == "plug" else 150.2)
-                    
                     h1 = list(plug_state["plug"]["history"])
                     h2 = list(plug_state["server"]["history"])
+
+                # Read from cache — zero blocking
+                with energy_cache_lock:
+                    for d_key in ["plug", "server"]:
+                        today_kwh += energy_cache[d_key]["total_kwh"]
+                        cost_rm += energy_cache[d_key]["cost_rm"]
+                        month_kwh += energy_cache[d_key]["total_kwh"] + (42.5 if d_key == "plug" else 150.2)
                 
                 pwr_kw = pwr_w / 1000.0
                 min_len = min(len(h1), len(h2))
@@ -704,18 +714,10 @@ def render_energy_content():
                 pwr_w  = s["watts"]
                 pwr_kw = pwr_w / 1000.0
                 
-                try:
-                    today = db.get_today_summary(tuya_local.DEVICES[dk]["id"])
-                    today_kwh = today["total_kwh"]
-                    cost_rm   = today["cost_rm"]
-                    db_error_notified = False
-                except Exception as e:
-                    today_kwh = 0
-                    cost_rm   = 0
-                    if not db_error_notified:
-                        ui.notify(f"Database error: could not fetch energy data. Is MariaDB running?", type="negative")
-                        db_error_notified = True
-                    print(f"[db error] get_today_summary failed: {e}")
+                # Read from cache — zero blocking
+                with energy_cache_lock:
+                    today_kwh = energy_cache[dk]["total_kwh"]
+                    cost_rm   = energy_cache[dk]["cost_rm"]
                     
                 month_kwh = today_kwh + (42.5 if dk == "plug" else 150.2)
                 labels = [p["t"] for p in history]
@@ -730,7 +732,7 @@ def render_energy_content():
                 peak_watt[0] = pwr_kw
                 peak_usage_label.set_text(f"{pwr_kw:.3f}")
 
-            # Update chart with history or mocked intervals
+            # Update chart with history or DB intervals (offloaded to thread pool)
             if chart_filter['value'] != 'Live':
                 from datetime import datetime
                 labels, values = [], []
@@ -738,14 +740,14 @@ def render_energy_content():
                 try:
                     if chart_filter['value'] == 'Day':
                         if dk == 'all':
-                            pts1 = db.get_hourly_history(tuya_local.DEVICES["plug"]["id"], 24)
-                            pts2 = db.get_hourly_history(tuya_local.DEVICES["server"]["id"], 24)
+                            pts1 = await run.io_bound(db.get_hourly_history, tuya_local.DEVICES["plug"]["id"], 24)
+                            pts2 = await run.io_bound(db.get_hourly_history, tuya_local.DEVICES["server"]["id"], 24)
                             d1 = {p["hour_str"]: p["kwh"] for p in pts1}
                             d2 = {p["hour_str"]: p["kwh"] for p in pts2}
                             all_hours = sorted(list(set(d1.keys()) | set(d2.keys())))
                             pts = [{"hour_str": h, "kwh": d1.get(h, 0) + d2.get(h, 0)} for h in all_hours]
                         else:
-                            pts = db.get_hourly_history(tuya_local.DEVICES[dk]["id"], 24)
+                            pts = await run.io_bound(db.get_hourly_history, tuya_local.DEVICES[dk]["id"], 24)
                         labels = [datetime.strptime(p["hour_str"], "%Y-%m-%d %H:%M:%S").strftime("%H:00") for p in pts]
                         values = [round(p["kwh"], 3) for p in pts]
                         area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
@@ -754,14 +756,14 @@ def render_energy_content():
                     elif chart_filter['value'] in ['Week', 'Month']:
                         days_limit = 7 if chart_filter['value'] == 'Week' else 30
                         if dk == 'all':
-                            pts1 = db.get_daily_history(tuya_local.DEVICES["plug"]["id"], days_limit)
-                            pts2 = db.get_daily_history(tuya_local.DEVICES["server"]["id"], days_limit)
+                            pts1 = await run.io_bound(db.get_daily_history, tuya_local.DEVICES["plug"]["id"], days_limit)
+                            pts2 = await run.io_bound(db.get_daily_history, tuya_local.DEVICES["server"]["id"], days_limit)
                             d1 = {str(p["date_str"]): p["kwh"] for p in pts1}
                             d2 = {str(p["date_str"]): p["kwh"] for p in pts2}
                             all_days = sorted(list(set(d1.keys()) | set(d2.keys())))
                             pts = [{"date_str": d, "kwh": d1.get(d, 0) + d2.get(d, 0)} for d in all_days]
                         else:
-                            pts = db.get_daily_history(tuya_local.DEVICES[dk]["id"], days_limit)
+                            pts = await run.io_bound(db.get_daily_history, tuya_local.DEVICES[dk]["id"], days_limit)
                         labels = [datetime.strptime(str(p["date_str"]), "%Y-%m-%d").strftime("%b %d") for p in pts]
                         values = [round(p["kwh"], 3) for p in pts]
                         area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
@@ -776,7 +778,7 @@ def render_energy_content():
             area_chart.options['series'][0]['data'] = values
             area_chart.update()
 
-        ui.timer(2.0, update_energy_stats)
+        ui.timer(3.0, update_energy_stats)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -875,15 +877,15 @@ def _build_plug_panel(dev_key: str) -> dict:
         else:
             warn_ref = None
 
-        def handle_toggle():
+        async def handle_toggle():
             with plug_lock:
                 st = plug_state[dev_key]["status"]
             current_on = st["switch"] if st else False
 
             if not current_on:
-                ok_cmd = tuya_local.set_switch(dev_key, True)
+                ok_cmd = await run.io_bound(tuya_local.set_switch, dev_key, True)
                 if ok_cmd:
-                    db.insert_state_change(dev_id, cfg["name"], True)
+                    await run.io_bound(db.insert_state_change, dev_id, cfg["name"], True)
                     server_off_confirm["pending"] = False
                     # Update button UI immediately
                     toggle_btn.classes(remove="plug-toggle-on plug-toggle-off plug-toggle-warn").classes("plug-toggle-on")
@@ -905,9 +907,9 @@ def _build_plug_panel(dev_key: str) -> dict:
                 ui.notify("⚠ Server plug — click again to confirm OFF", type="warning")
                 return
 
-            ok_cmd = tuya_local.set_switch(dev_key, False)
+            ok_cmd = await run.io_bound(tuya_local.set_switch, dev_key, False)
             if ok_cmd:
-                db.insert_state_change(dev_id, cfg["name"], False)
+                await run.io_bound(db.insert_state_change, dev_id, cfg["name"], False)
                 server_off_confirm["pending"] = False
                 # Update button UI immediately
                 toggle_btn.classes(remove="plug-toggle-on plug-toggle-off plug-toggle-warn").classes("plug-toggle-off")
@@ -975,8 +977,8 @@ def _build_plug_panel(dev_key: str) -> dict:
                             f"LED → {l}")
                     ).classes("plug-led-btn")
 
-    def _exec_cmd(dk, fn, label):
-        ok_cmd = fn()
+    async def _exec_cmd(dk, fn, label):
+        ok_cmd = await run.io_bound(fn)
         ui.notify(f"✅ {label}" if ok_cmd else f"⚠ {label} failed",
                   type="positive" if ok_cmd else "warning")
 
@@ -1047,13 +1049,11 @@ def render_plugs_content():
         refs["ref_current"].set_text(f"{s['current_ma']}")
         refs["ref_total_kwh"].set_text(f"{s['add_ele_kwh']:.3f}")
 
-        # Today's energy from DB
-        try:
-            today = db.get_today_summary(refs["dev_id"])
-            refs["ref_today_kwh"].set_text(f"{today['total_kwh']:.4f}")
-            refs["ref_today_rm"].set_text(f"RM {today['cost_rm']:.4f}")
-        except Exception:
-            pass
+        # Today's energy from cache — zero blocking
+        with energy_cache_lock:
+            today = energy_cache[dk].copy()
+        refs["ref_today_kwh"].set_text(f"{today['total_kwh']:.4f}")
+        refs["ref_today_rm"].set_text(f"RM {today['cost_rm']:.4f}")
 
         # Chart
         new_opts = _plug_chart_options(dk)
@@ -1064,7 +1064,7 @@ def render_plugs_content():
         _update_panel(plug_refs)
         _update_panel(server_refs)
 
-    ui.timer(2.0, _refresh_plugs)
+    ui.timer(4.0, _refresh_plugs)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1103,11 +1103,29 @@ def index_page():
             render_plugs_content()
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  ENERGY CACHE LOOP (runs in background thread, feeds UI timers)
+# ─────────────────────────────────────────────────────────────────────────────
+def energy_cache_loop():
+    """Single background thread polls DB summaries every 10s, caches results.
+    UI timers read from this cache instead of querying DB directly."""
+    while True:
+        for dev_key in ("plug", "server"):
+            try:
+                summary = db.get_today_summary(tuya_local.DEVICES[dev_key]["id"])
+                with energy_cache_lock:
+                    energy_cache[dev_key] = summary
+            except Exception as e:
+                print(f"[energy_cache] {dev_key}: {e}")
+        time.sleep(10)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  STARTUP
 # ─────────────────────────────────────────────────────────────────────────────
 app.on_startup(lambda: asyncio.create_task(update_metrics()))
 app.on_startup(lambda: asyncio.create_task(update_ai_insights()))
 threading.Thread(target=plug_polling_loop, daemon=True).start()
+threading.Thread(target=energy_cache_loop, daemon=True).start()
 
 @ui.page('/cloud')
 async def cloud_page():
