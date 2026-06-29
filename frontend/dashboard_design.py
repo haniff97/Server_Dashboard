@@ -1005,7 +1005,7 @@ def index_page():
                 ui.label().bind_text_from(globals(), 'last_update').classes('text-sm text-slate-600 dark:text-gray-300 font-mono')
             ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
 
-    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-0 gap-4 sm:gap-8'):
+    with ui.column().classes('w-full max-w-7xl mx-auto px-4 sm:px-6 pt-0 pb-4 sm:pb-6 mt-0 gap-4 sm:gap-8'):
         with ui.tab_panels(toggle, value='Server').classes('w-full bg-transparent p-0'):
             with ui.tab_panel('Server').classes('p-0'):
                 render_server_content()

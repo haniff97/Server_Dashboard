@@ -432,7 +432,7 @@ def add_common_styles():
 #  TAB 1 — SERVER
 # ─────────────────────────────────────────────────────────────────────────────
 def render_server_content():
-    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-16 sm:mt-20 gap-4 sm:gap-8'):
+    with ui.column().classes('w-full max-w-7xl mx-auto px-4 sm:px-6 pt-0 pb-4 sm:pb-6 gap-4 sm:gap-8'):
 
 
         with ui.row().classes('items-center gap-2 mb-2'):
@@ -572,7 +572,7 @@ def render_energy_content():
     peak_watt = [0.0]
     selected_device = {'value': 'all'}  # default device for energy view
 
-    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-16 sm:mt-20 gap-4 sm:gap-6'):
+    with ui.column().classes('w-full max-w-7xl mx-auto px-4 sm:px-6 pt-0 pb-4 sm:pb-6 gap-4 sm:gap-6'):
 
 
         with ui.grid().classes('w-full gap-4 sm:gap-6 grid-cols-1 md:grid-cols-3 items-stretch'):
@@ -1015,7 +1015,7 @@ def _build_plug_panel(dev_key: str) -> dict:
 #  TAB 3 — PLUGS
 # ─────────────────────────────────────────────────────────────────────────────
 def render_plugs_content():
-    with ui.column().classes('w-full max-w-7xl mx-auto p-4 sm:p-6 mt-16 sm:mt-20 gap-4 sm:gap-6'):
+    with ui.column().classes('w-full max-w-7xl mx-auto px-4 sm:px-6 pt-0 pb-4 sm:pb-6 gap-4 sm:gap-6'):
 
 
         with ui.row().classes('items-center gap-2 mb-2'):
@@ -1104,7 +1104,7 @@ def index_page():
                 ui.label().bind_text_from(globals(), 'last_update').classes('text-sm text-slate-600 dark:text-gray-300 font-mono')
             ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
 
-    with ui.tab_panels(toggle, value='Server').classes('w-full bg-transparent p-0 mt-8'):
+    with ui.tab_panels(toggle, value='Server').classes('w-full bg-transparent p-0 mt-0'):
         with ui.tab_panel('Server').classes('p-0'):
             render_server_content()
         with ui.tab_panel('Energy').classes('p-0'):
