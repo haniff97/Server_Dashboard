@@ -1,0 +1,897 @@
+--- frontend/dashboard.py	2026-07-10 01:20:37
++++ frontend/dashboard_design.py	2026-06-29 20:14:30
+@@ -1,251 +1,191 @@
+ #!/usr/bin/env python3
+ """
+-Homelab Dashboard
+-Built with NiceGUI + Prometheus + tinytuya (local LAN)
++Custom Homelab Dashboard - DESIGN MODE
++Built with NiceGUI + Mock Data (Simulating tinytuya local LAN + MariaDB)
+ Pages: / (Server) | /energy (Energy Monitor) | /plugs (Smart Plugs)
+ """
+ import os
+-import sys
+ import asyncio
+-import subprocess
+ import threading
+ import time
+-
++import random
+ from collections import deque
+-from datetime import datetime
+ from typing import Any, Dict, Optional
+-from dotenv import load_dotenv
++from datetime import datetime
+ 
+-from nicegui import ui, app, run
+-from prometheus_api_client import PrometheusConnect
++from nicegui import ui, app
+ 
+-
+ # ─────────────────────────────────────────────────────────────────────────────
+-#  Ensure project root is importable (tuya_local, db live in parent dir)
+-# ─────────────────────────────────────────────────────────────────────────────
+-_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+-if _project_root not in sys.path:
+-    sys.path.insert(0, _project_root)
+-
+-import tuya_local
+-import db
+-import aws_iot_publisher
+-import cloud_db
+-# ─────────────────────────────────────────────────────────────────────────────
+-#  PROMETHEUS
+-# ─────────────────────────────────────────────────────────────────────────────
+-prom = PrometheusConnect(url="http://localhost:9090", disable_ssl=True)
+-
+-# ─────────────────────────────────────────────────────────────────────────────
+-#  ENV
+-# ─────────────────────────────────────────────────────────────────────────────
+-env_path = "/mnt/nvme/Projects/dashboard/.env" 
+-load_dotenv(env_path)
+-
+-# ─────────────────────────────────────────────────────────────────────────────
+ #  GLOBAL STATE — system
+ # ─────────────────────────────────────────────────────────────────────────────
+ system_stats = {
+     'cpu_percent': 0, 'cpu_temp': 0,
+-    'memory_percent': 0, 'memory_used_gb': 0, 'memory_total_gb': 0,
+-    'nvme_percent': 0, 'nvme_used_gb': 0, 'nvme_total_gb': 0, 'nvme_temp': 0,
+-    'hdd_percent': 0, 'hdd_used_gb': 0, 'hdd_total_gb': 0, 'hdd_status': 'unknown',
++    'memory_percent': 0, 'memory_used_gb': 0, 'memory_total_gb': 16.0,
++    'nvme_percent': 0, 'nvme_used_gb': 0, 'nvme_total_gb': 1000.0, 'nvme_temp': 0,
++    'hdd_percent': 0, 'hdd_used_gb': 0, 'hdd_total_gb': 4000.0, 'hdd_status': 'idle',
+ }
+ iot_devices: dict = {}
+-AI_CACHE_PATH = "/mnt/nvme/Projects/dashboard/gemini_cache.txt"
+-ai_insights   = "🤖 Initializing AI analysis...\n💡 Gathering system data..."
+-last_update   = ""
++ai_insights = "🤖 Initializing AI analysis...\n💡 Gathering system data..."
++last_update = ""
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
+-#  GLOBAL STATE — Smart Plugs (tinytuya local LAN)
++#  MOCK DEVICE CONFIG (mirrors tuya_local.DEVICES)
+ # ─────────────────────────────────────────────────────────────────────────────
+-PLUG_POLL_INTERVAL = 10  # seconds
+-
+-plug_state: Dict[str, Dict[str, Any]] = {
+-    "plug":   {"status": None, "ok": False, "history": deque(maxlen=120)},
+-    "server": {"status": None, "ok": False, "history": deque(maxlen=120)},
++MOCK_DEVICES = {
++    "plug": {
++        "name":      "Smart Plug",
++        "id":        "mock_plug_001",
++        "ip":        "192.168.1.2",
++        "is_server": False,
++    },
++    "server": {
++        "name":      "Server",
++        "id":        "mock_server_001",
++        "ip":        "192.168.1.15",
++        "is_server": True,
++    },
+ }
+-plug_lock = threading.Lock()
+-db_error_notified = False
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
+-#  GLOBAL STATE — Energy DB cache (avoids blocking UI timers with DB queries)
++#  GLOBAL STATE — Smart Plugs (MOCKED tinytuya)
+ # ─────────────────────────────────────────────────────────────────────────────
+-energy_cache: Dict[str, dict] = {
+-    "plug":   {"total_kwh": 0, "cost_rm": 0},
+-    "server": {"total_kwh": 0, "cost_rm": 0},
++PLUG_POLL_INTERVAL = 2  # faster for design preview
++
++plug_state: Dict[str, Dict[str, Any]] = {
++    "plug":   {"status": None, "ok": True, "history": deque(maxlen=120)},
++    "server": {"status": None, "ok": True, "history": deque(maxlen=120)},
+ }
+-energy_cache_lock = threading.Lock()
++plug_lock = threading.Lock()
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
+-#  SYSTEM HELPERS
++#  SYSTEM HELPERS (MOCK)
+ # ─────────────────────────────────────────────────────────────────────────────
+ def get_cpu_temp():
+-    try:
+-        with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+-            return round(float(f.read()) / 1000.0, 1)
+-    except:
+-        return 0
++    return round(random.uniform(40.0, 65.0), 1)
+ 
+ def get_nvme_temp():
+-    try:
+-        result = subprocess.run(['smartctl', '-A', '/dev/nvme0n1'],
+-                                capture_output=True, text=True, timeout=5)
+-        for line in result.stdout.split('\n'):
+-            if 'Temperature' in line and 'Celsius' in line:
+-                parts = line.split()
+-                for i, part in enumerate(parts):
+-                    if part == 'Celsius' and i > 0:
+-                        return int(parts[i-1])
+-        return 0
+-    except:
+-        return 0
++    return round(random.uniform(30.0, 50.0), 1)
+ 
+ def get_hdd_status():
+-    try:
+-        result = subprocess.run(['iostat', '-d', 'sda', '1', '2'],
+-                                capture_output=True, text=True, timeout=3)
+-        lines = result.stdout.strip().split('\n')
+-        if len(lines) > 3:
+-            last_line = lines[-1].split()
+-            if len(last_line) > 3 and float(last_line[3]) > 0.1:
+-                return 'active'
+-        return 'idle'
+-    except:
+-        return 'idle'
++    return 'active' if random.random() > 0.7 else 'idle'
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
+-#  PLUG POLLING THREAD (tinytuya local LAN)
++#  PLUG POLLING THREAD (MOCK — simulates tinytuya local LAN)
+ # ─────────────────────────────────────────────────────────────────────────────
+ def plug_polling_loop():
+-    """Poll both smart plugs via tinytuya and store to DB."""
+-    last_poll_time: Dict[str, Optional[float]] = {"plug": None, "server": None}
+-
++    """Mock polling loop that generates realistic plug data."""
+     while True:
+         for dev_key in ("plug", "server"):
+-            status = tuya_local.get_status(dev_key)
+-            now = time.time()
++            cfg = MOCK_DEVICES[dev_key]
+ 
+             with plug_lock:
+-                if status:
+-                    plug_state[dev_key]["status"] = status
+-                    plug_state[dev_key]["ok"]     = True
+-                    plug_state[dev_key]["history"].append({
+-                        "t": datetime.now().strftime("%H:%M:%S"),
+-                        "w": status["watts"],
+-                    })
++                prev = plug_state[dev_key]["status"]
++                is_on = prev["switch"] if prev else True
+ 
+-                    # Wh delta calculation
+-                    wh_delta = 0.0
+-                    if last_poll_time[dev_key]:
+-                        elapsed_h = (now - last_poll_time[dev_key]) / 3600
+-                        wh_delta  = status["watts"] * elapsed_h
++                if is_on:
++                    if dev_key == "server":
++                        watts = round(random.uniform(80.0, 160.0), 2)
++                    else:
++                        watts = round(random.uniform(5.0, 35.0), 2)
++                else:
++                    watts = 0.0
+ 
+-                    last_poll_time[dev_key] = now
++                voltage = round(random.uniform(228.0, 232.0), 1)
++                current_ma = int(watts / voltage * 1000) if voltage > 0 else 0
++                add_ele_kwh = (prev["add_ele_kwh"] + 0.001) if prev else 1.450
+ 
+-                    # Store to MariaDB
+-                    try:
+-                        # Publish to AWS IoT Core
+-                        aws_iot_publisher.publish(dev_key, status, wh_delta)
+-                        
+-                        db.insert_energy(
+-                            device_id=tuya_local.DEVICES[dev_key]["id"],
+-                            device_name=status["device_name"],
+-                            watts=status["watts"],
+-                            wh_delta=wh_delta,
+-                            voltage=status["voltage"],
+-                            current_ma=status["current_ma"],
+-                        )
+-                        db.aggregate_daily(tuya_local.DEVICES[dev_key]["id"])
+-                    except Exception as e:
+-                        print(f"[db] insert error ({dev_key}): {e}")
+-                else:
+-                    plug_state[dev_key]["ok"] = False
++                status = {
++                    "device_key":  dev_key,
++                    "device_name": cfg["name"],
++                    "switch":      is_on,
++                    "watts":       watts,
++                    "voltage":     voltage,
++                    "current_ma":  current_ma,
++                    "add_ele_kwh": round(add_ele_kwh, 4),
++                    "fault":       0,
++                }
+ 
++                plug_state[dev_key]["status"] = status
++                plug_state[dev_key]["ok"]     = random.random() > 0.05
++                plug_state[dev_key]["history"].append({
++                    "t": datetime.now().strftime("%H:%M:%S"),
++                    "w": watts,
++                })
++
+         time.sleep(PLUG_POLL_INTERVAL)
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
+-#  SYSTEM METRICS LOOP
++#  SYSTEM METRICS ASYNC LOOP (MOCK)
+ # ─────────────────────────────────────────────────────────────────────────────
+-def _fetch_all_metrics() -> dict:
+-    """Pure sync function — runs in thread pool via run.io_bound(), never blocks event loop."""
+-    stats = {}
+-    iot = {}
++async def update_metrics():
++    while True:
++        global system_stats, iot_devices, last_update
++        try:
++            system_stats['cpu_percent'] = round(random.uniform(10.0, 80.0), 1)
++            system_stats['cpu_temp']    = get_cpu_temp()
+ 
+-    cpu_q = prom.custom_query(
+-        query='100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)')
+-    stats['cpu_percent'] = round(float(cpu_q[0]['value'][1]), 1) if cpu_q else 0
+-    stats['cpu_temp']    = get_cpu_temp()
++            system_stats['memory_used_gb']  = round(random.uniform(4.0, 12.0), 2)
++            system_stats['memory_percent']  = round(system_stats['memory_used_gb'] / system_stats['memory_total_gb'] * 100, 1)
+ 
+-    mem_used  = prom.custom_query(query='node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes')
+-    mem_total = prom.custom_query(query='node_memory_MemTotal_bytes')
+-    if mem_used and mem_total:
+-        stats['memory_used_gb']  = round(float(mem_used[0]['value'][1]) / (1024**3), 2)
+-        stats['memory_total_gb'] = round(float(mem_total[0]['value'][1]) / (1024**3), 2)
+-        stats['memory_percent']  = round(
+-            stats['memory_used_gb'] / stats['memory_total_gb'] * 100, 1)
++            system_stats['nvme_used_gb']  = round(random.uniform(200.0, 800.0), 1)
++            system_stats['nvme_percent']  = round(system_stats['nvme_used_gb'] / system_stats['nvme_total_gb'] * 100, 1)
++            system_stats['nvme_temp'] = get_nvme_temp()
+ 
+-    nvme_used  = prom.custom_query(query='node_filesystem_size_bytes{mountpoint="/mnt/nvme"} - node_filesystem_avail_bytes{mountpoint="/mnt/nvme"}')
+-    nvme_total = prom.custom_query(query='node_filesystem_size_bytes{mountpoint="/mnt/nvme"}')
+-    if nvme_used and nvme_total:
+-        stats['nvme_used_gb']  = round(float(nvme_used[0]['value'][1]) / (1024**3), 1)
+-        stats['nvme_total_gb'] = round(float(nvme_total[0]['value'][1]) / (1024**3), 1)
+-        stats['nvme_percent']  = round(
+-            stats['nvme_used_gb'] / stats['nvme_total_gb'] * 100, 1)
+-    stats['nvme_temp'] = get_nvme_temp()
++            system_stats['hdd_used_gb']  = round(random.uniform(1000.0, 3500.0), 1)
++            system_stats['hdd_percent']  = round(system_stats['hdd_used_gb'] / system_stats['hdd_total_gb'] * 100, 1)
++            system_stats['hdd_status'] = get_hdd_status()
+ 
+-    hdd_used  = prom.custom_query(query='node_filesystem_size_bytes{mountpoint="/mnt/hdd-public"} - node_filesystem_avail_bytes{mountpoint="/mnt/hdd-public"}')
+-    hdd_total = prom.custom_query(query='node_filesystem_size_bytes{mountpoint="/mnt/hdd-public"}')
+-    if hdd_used and hdd_total:
+-        stats['hdd_used_gb']  = round(float(hdd_used[0]['value'][1]) / (1024**3), 1)
+-        stats['hdd_total_gb'] = round(float(hdd_total[0]['value'][1]) / (1024**3), 1)
+-        stats['hdd_percent']  = round(
+-            stats['hdd_used_gb'] / stats['hdd_total_gb'] * 100, 1)
+-    stats['hdd_status'] = get_hdd_status()
+-
+-    esp32_temps    = prom.custom_query(query='esp32_temperature_celsius')
+-    esp32_humidity = prom.custom_query(query='esp32_humidity_percent')
+-    for metric in esp32_temps:
+-        did = metric['metric']['device_id']
+-        iot.setdefault(did, {})['temperature'] = round(float(metric['value'][1]), 1)
+-    for metric in esp32_humidity:
+-        did = metric['metric']['device_id']
+-        iot.setdefault(did, {})['humidity'] = round(float(metric['value'][1]), 1)
+-
+-    return {'system': stats, 'iot': iot}
+-
++            # Mock ESP32 IoT device
++            iot_devices['esp32-main-room'] = {
++                'temperature': round(random.uniform(22.0, 26.0), 1),
++                'humidity': round(random.uniform(45.0, 60.0), 1)
++            }
+ 
+-async def update_metrics():
+-    while True:
+-        global system_stats, iot_devices, last_update
+-        try:
+-            result = await run.io_bound(_fetch_all_metrics)
+-            system_stats.update(result['system'])
+-            iot_devices.update(result['iot'])
+             last_update = datetime.now().strftime("%H:%M:%S")
+         except Exception as e:
+             print(f"❌ Metrics error: {e}")
+-        await asyncio.sleep(7)
++        await asyncio.sleep(2)
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
+-#  AI INSIGHTS LOOP
++#  AI INSIGHTS ASYNC LOOP (MOCK)
+ # ─────────────────────────────────────────────────────────────────────────────
+ async def update_ai_insights():
+     global ai_insights
+     while True:
+         try:
+-            if os.path.exists(AI_CACHE_PATH):
+-                mtime = datetime.fromtimestamp(os.path.getmtime(AI_CACHE_PATH))
+-                with open(AI_CACHE_PATH, "r") as f:
+-                    content = f.read()
+-                ai_insights = f"🕒 Last Analysis: {mtime.strftime('%H:%M')}\n\n{content}"
++            await asyncio.sleep(5)
++            if random.random() > 0.7:
++                ai_insights = "Concerns Detected (MOCK):\nHigh CPU usage detected\n\nRecommendation: Check active processes\nPlug power draw is within normal range."
+             else:
+-                ai_insights = "🤖 Waiting for Gemini..."
++                ai_insights = "All systems healthy (MOCK)\nPerformance: Optimal\nNo immediate concerns"
+         except Exception as e:
+-            ai_insights = f"❌ AI Read Error: {e}"
+-        await asyncio.sleep(300)
++            ai_insights = f"❌ AI Mock Error: {e}"
++        await asyncio.sleep(15)
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
++#  MOCK DB HELPERS
++# ─────────────────────────────────────────────────────────────────────────────
++def mock_get_today_summary(dev_id: str) -> dict:
++    """Simulate db.get_today_summary()."""
++    return {
++        "total_wh":  round(random.uniform(50, 500), 4),
++        "total_kwh": round(random.uniform(0.05, 0.5), 6),
++        "cost_rm":   round(random.uniform(0.01, 0.12), 4),
++    }
++
++def mock_calculate_tnb_cost(kwh: float) -> float:
++    """Simulate db.calculate_tnb_cost()."""
++    tiers = [(200, 0.218), (100, 0.334), (300, 0.516), (float("inf"), 0.546)]
++    cost, remaining = 0.0, kwh
++    for limit, rate in tiers:
++        if remaining <= 0:
++            break
++        usage = min(remaining, limit)
++        cost += usage * rate
++        remaining -= usage
++    return round(cost, 4)
++
++# ─────────────────────────────────────────────────────────────────────────────
+ #  SHARED STYLES
+ # ─────────────────────────────────────────────────────────────────────────────
+ def add_common_styles():
+@@ -424,17 +364,11 @@
+     ''')
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
+-#  (nav_toggle removed, using index_page SPA toggle instead)
+-# ─────────────────────────────────────────────────────────────────────────────
+-
+-
+-# ─────────────────────────────────────────────────────────────────────────────
+-#  TAB 1 — SERVER
++#  RENDER SERVER CONTENT
+ # ─────────────────────────────────────────────────────────────────────────────
+ def render_server_content():
+     with ui.column().classes('w-full gap-4 sm:gap-8'):
+ 
+-
+         with ui.row().classes('items-center gap-2 mb-2'):
+             ui.icon('analytics', color='primary')
+             ui.label('System Performance').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
+@@ -520,7 +454,7 @@
+                     with plug_lock:
+                         s  = plug_state[dev_key]["status"]
+                         ok = plug_state[dev_key]["ok"]
+-                    cfg = tuya_local.DEVICES[dev_key]
++                    cfg = MOCK_DEVICES[dev_key]
+ 
+                     with ui.card().classes(
+                         'glass-card p-4 min-w-[200px] hover:scale-105 '
+@@ -552,7 +486,7 @@
+                         else:
+                             ui.label('No data').classes('text-sm text-slate-500 mt-auto')
+ 
+-        ui.timer(6.0, update_iot_display)
++        ui.timer(5.0, update_iot_display)
+ 
+         with ui.card().classes(
+             'glass-card w-full p-4 sm:p-6 mt-2 sm:mt-4 bg-slate-200/50 dark:bg-slate-800/50 '
+@@ -565,13 +499,11 @@
+                         'text-slate-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed')
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
++#  RENDER ENERGY CONTENT
+ # ─────────────────────────────────────────────────────────────────────────────
+-#  TAB 2 — ENERGY
+-# ─────────────────────────────────────────────────────────────────────────────
+ def render_energy_content():
+     peak_watt = [0.0]
+-    selected_device = {'value': 'all'}  # default device for energy view
+-
++    selected_device = {'value': 'all'}
+     with ui.column().classes('w-full gap-4 sm:gap-6'):
+ 
+ 
+@@ -636,7 +568,7 @@
+         # ── Power history chart ──────────────────────────────────────────────
+         chart_filter = {'value': 'Live'}
+         with ui.element('div').classes('split-card w-full mb-6'):
+-            with ui.column().classes('split-left flex flex-col justify-between gt-sm'):
++            with ui.column().classes('split-left flex flex-col justify-between hidden md:flex'):
+                 with ui.column():
+                     ui.label('Analytics').classes('text-xs font-bold uppercase tracking-widest opacity-80 mb-2')
+                     ui.label('Energy\nTrends').classes('text-3xl font-black mt-2 whitespace-pre-line leading-tight')
+@@ -655,45 +587,46 @@
+                             chart_cost.classes(add='hidden')
+                         else:
+                             chart_cost.classes(remove='hidden')
++                        # The timer loop will pick up the new filter value on its next tick
+                         
+                     ui.toggle(['Live', 'Day', 'Week', 'Month'], value='Live', on_change=on_filter_change).props('unelevated size=sm').classes('bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400')
+ 
+-                area_chart = ui.echart({
+-                    'tooltip': {
+-                        'trigger': 'axis',
+-                        'backgroundColor': 'rgba(15, 23, 42, 0.6)',
+-                        'borderColor': 'rgba(255, 255, 255, 0.2)',
+-                        'textStyle': {'color': '#f8fafc', 'fontFamily': 'Inter'}
+-                    },
+-                    'legend':  {'data': ['Power (W)'], 'textStyle': {'color': '#94a3b8'}, 'top': 0, 'right': 0},
+-                    'grid':    {'left': '3%', 'right': '4%', 'bottom': '3%', 'containLabel': True},
+-                    'xAxis':   [{'type': 'category', 'boundaryGap': False, 'data': [],
+-                                 'axisLabel': {'color': '#94a3b8', 'rotate': 45},
+-                                 'splitLine': {'show': True, 'lineStyle': {'color': 'rgba(255,255,255,0.05)'}} }],
+-                    'yAxis':   [{'type': 'value', 'name': 'Watts',
+-                                 'nameTextStyle': {'color': '#94a3b8'},
+-                                 'axisLabel': {'color': '#94a3b8'},
+-                                 'splitLine': {'show': True, 'lineStyle': {'color': 'rgba(255,255,255,0.05)'}} }],
+-                    'series':  [{'name': 'Power (W)', 'type': 'line', 'smooth': True,
+-                                 'lineStyle': {
+-                                     'color': '#8b5cf6',
+-                                     'width': 3,
+-                                     'shadowColor': 'rgba(139, 92, 246, 0.5)',
+-                                     'shadowBlur': 10
+-                                 },
+-                                 'areaStyle': {'color': {
+-                                     'type': 'linear', 'x': 0, 'y': 0, 'x2': 0, 'y2': 1,
+-                                     'colorStops': [
+-                                         {'offset': 0, 'color': 'rgba(139, 92, 246, 0.4)'},
+-                                         {'offset': 1, 'color': 'rgba(139, 92, 246, 0.0)'},
+-                                     ],
+-                                 }},
+-                                 'itemStyle': {'color': '#8b5cf6', 'borderColor': '#fff', 'borderWidth': 2},
+-                                 'symbolSize': 6,
+-                                 'data': []}],
+-                }).classes('w-full h-[300px]')
++            area_chart = ui.echart({
++                'tooltip': {
++                    'trigger': 'axis',
++                    'backgroundColor': 'rgba(15, 23, 42, 0.6)',
++                    'borderColor': 'rgba(255, 255, 255, 0.2)',
++                    'textStyle': {'color': '#f8fafc', 'fontFamily': 'Inter'}
++                },
++                'legend':  {'data': ['Power (W)'], 'textStyle': {'color': '#94a3b8'}, 'top': 0, 'right': 0},
++                'grid':    {'left': '3%', 'right': '4%', 'bottom': '3%', 'containLabel': True},
++                'xAxis':   [{'type': 'category', 'boundaryGap': False, 'data': [],
++                             'axisLabel': {'color': '#94a3b8', 'rotate': 45},
++                             'splitLine': {'show': True, 'lineStyle': {'color': 'rgba(255,255,255,0.05)'}} }],
++                'yAxis':   [{'type': 'value', 'name': 'Watts',
++                             'nameTextStyle': {'color': '#94a3b8'},
++                             'axisLabel': {'color': '#94a3b8'},
++                             'splitLine': {'show': True, 'lineStyle': {'color': 'rgba(255,255,255,0.05)'}} }],
++                'series':  [{'name': 'Power (W)', 'type': 'line', 'smooth': True,
++                             'lineStyle': {
++                                 'color': '#8b5cf6',
++                                 'width': 3,
++                                 'shadowColor': 'rgba(139, 92, 246, 0.5)',
++                                 'shadowBlur': 10
++                             },
++                             'areaStyle': {'color': {
++                                 'type': 'linear', 'x': 0, 'y': 0, 'x2': 0, 'y2': 1,
++                                 'colorStops': [
++                                     {'offset': 0, 'color': 'rgba(139, 92, 246, 0.4)'},
++                                     {'offset': 1, 'color': 'rgba(139, 92, 246, 0.0)'},
++                                 ],
++                             }},
++                             'itemStyle': {'color': '#8b5cf6', 'borderColor': '#fff', 'borderWidth': 2},
++                             'symbolSize': 6,
++                             'data': []}],
++            }).classes('w-full h-[300px]')
+ 
+-        async def update_energy_stats():
++        def update_energy_stats():
+             dk = selected_device['value']
+ 
+             if dk == 'all':
+@@ -702,15 +635,13 @@
+                     for d_key in ["plug", "server"]:
+                         s = plug_state[d_key]["status"]
+                         if s: pwr_w += s["watts"]
++                        today = mock_get_today_summary(MOCK_DEVICES[d_key]["id"])
++                        today_kwh += today["total_kwh"]
++                        cost_rm += today["cost_rm"]
++                        month_kwh += today["total_kwh"] + (42.5 if d_key == "plug" else 150.2)
++                    
+                     h1 = list(plug_state["plug"]["history"])
+                     h2 = list(plug_state["server"]["history"])
+-
+-                # Read from cache — zero blocking
+-                with energy_cache_lock:
+-                    for d_key in ["plug", "server"]:
+-                        today_kwh += energy_cache[d_key]["total_kwh"]
+-                        cost_rm += energy_cache[d_key]["cost_rm"]
+-                        month_kwh += energy_cache[d_key]["total_kwh"] + (42.5 if d_key == "plug" else 150.2)
+                 
+                 pwr_kw = pwr_w / 1000.0
+                 min_len = min(len(h1), len(h2))
+@@ -726,12 +657,9 @@
+ 
+                 pwr_w  = s["watts"]
+                 pwr_kw = pwr_w / 1000.0
+-                
+-                # Read from cache — zero blocking
+-                with energy_cache_lock:
+-                    today_kwh = energy_cache[dk]["total_kwh"]
+-                    cost_rm   = energy_cache[dk]["cost_rm"]
+-                    
++                today = mock_get_today_summary(MOCK_DEVICES[dk]["id"])
++                today_kwh = today["total_kwh"]
++                cost_rm   = today["cost_rm"]
+                 month_kwh = today_kwh + (42.5 if dk == "plug" else 150.2)
+                 labels = [p["t"] for p in history]
+                 values = [round(p["w"], 1) for p in history]
+@@ -745,47 +673,26 @@
+                 peak_watt[0] = pwr_kw
+                 peak_usage_label.set_text(f"{pwr_kw:.3f}")
+ 
+-            # Update chart with history or DB intervals (offloaded to thread pool)
++            # Update chart with history or mocked intervals
+             if chart_filter['value'] != 'Live':
+-                from datetime import datetime
+-                labels, values = [], []
++                import random
++                from datetime import datetime, timedelta
++                n_points = 24 if chart_filter['value'] == 'Day' else 7 if chart_filter['value'] == 'Week' else 30
++                now = datetime.now()
+                 
+-                try:
+-                    if chart_filter['value'] == 'Day':
+-                        if dk == 'all':
+-                            pts1 = await run.io_bound(db.get_hourly_history, tuya_local.DEVICES["plug"]["id"], 24)
+-                            pts2 = await run.io_bound(db.get_hourly_history, tuya_local.DEVICES["server"]["id"], 24)
+-                            d1 = {p["hour_str"]: p["kwh"] for p in pts1}
+-                            d2 = {p["hour_str"]: p["kwh"] for p in pts2}
+-                            all_hours = sorted(list(set(d1.keys()) | set(d2.keys())))
+-                            pts = [{"hour_str": h, "kwh": d1.get(h, 0) + d2.get(h, 0)} for h in all_hours]
+-                        else:
+-                            pts = await run.io_bound(db.get_hourly_history, tuya_local.DEVICES[dk]["id"], 24)
+-                        labels = [datetime.strptime(p["hour_str"], "%Y-%m-%d %H:%M:%S").strftime("%H:00") for p in pts]
+-                        values = [round(p["kwh"], 3) for p in pts]
+-                        area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
+-                        area_chart.options['series'][0]['name'] = 'Energy (kWh)'
+-
+-                    elif chart_filter['value'] in ['Week', 'Month']:
+-                        days_limit = 7 if chart_filter['value'] == 'Week' else 30
+-                        if dk == 'all':
+-                            pts1 = await run.io_bound(db.get_daily_history, tuya_local.DEVICES["plug"]["id"], days_limit)
+-                            pts2 = await run.io_bound(db.get_daily_history, tuya_local.DEVICES["server"]["id"], days_limit)
+-                            d1 = {str(p["date_str"]): p["kwh"] for p in pts1}
+-                            d2 = {str(p["date_str"]): p["kwh"] for p in pts2}
+-                            all_days = sorted(list(set(d1.keys()) | set(d2.keys())))
+-                            pts = [{"date_str": d, "kwh": d1.get(d, 0) + d2.get(d, 0)} for d in all_days]
+-                        else:
+-                            pts = await run.io_bound(db.get_daily_history, tuya_local.DEVICES[dk]["id"], days_limit)
+-                        labels = [datetime.strptime(str(p["date_str"]), "%Y-%m-%d").strftime("%b %d") for p in pts]
+-                        values = [round(p["kwh"], 3) for p in pts]
+-                        area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
+-                        area_chart.options['series'][0]['name'] = 'Energy (kWh)'
+-                        
+-                    total_kwh = sum(values)
+-                    chart_cost.set_text(f"EST. COST: RM {db.calculate_tnb_cost(total_kwh):.2f}")
+-                except Exception as e:
+-                    print(f"Chart error: {e}")
++                if chart_filter['value'] == 'Day':
++                    labels = [(now - timedelta(hours=i)).strftime("%H:00") for i in range(n_points)][::-1]
++                    values = [round(random.uniform(0.5, 3.5), 2) for _ in range(n_points)]
++                    area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
++                    area_chart.options['series'][0]['name'] = 'Energy (kWh)'
++                else:
++                    labels = [(now - timedelta(days=i)).strftime("%b %d") for i in range(n_points)][::-1]
++                    values = [round(random.uniform(10.0, 30.0), 2) for _ in range(n_points)]
++                    area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
++                    area_chart.options['series'][0]['name'] = 'Energy (kWh)'
++                    
++                total_kwh = sum(values)
++                chart_cost.set_text(f"EST. COST: RM {total_kwh * 0.218:.2f}")
+             else:
+                 area_chart.options['yAxis'][0]['name'] = 'Watts'
+                 area_chart.options['series'][0]['name'] = 'Power (W)'
+@@ -795,7 +702,7 @@
+             area_chart.options['series'][0]['data'] = values
+             area_chart.update()
+ 
+-        ui.timer(3.0, update_energy_stats)
++        ui.timer(2.0, update_energy_stats)
+ 
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
+@@ -841,7 +748,7 @@
+ 
+ def _build_plug_panel(dev_key: str) -> dict:
+     """Build one full device card for the /plugs page. Returns UI refs."""
+-    cfg       = tuya_local.DEVICES[dev_key]
++    cfg       = MOCK_DEVICES[dev_key]
+     is_server = cfg["is_server"]
+     dev_id    = cfg["id"]
+ 
+@@ -851,7 +758,7 @@
+     with plug_lock:
+         s  = plug_state[dev_key]["status"]
+         ok = plug_state[dev_key]["ok"]
+-    on = s["switch"] if s else False
++    on = s["switch"] if s else True
+     if on:
+         card_cls += " plug-on"
+ 
+@@ -894,25 +801,24 @@
+         else:
+             warn_ref = None
+ 
+-        async def handle_toggle():
++        def handle_toggle():
+             with plug_lock:
+                 st = plug_state[dev_key]["status"]
+-            current_on = st["switch"] if st else False
++            current_on = st["switch"] if st else True
+ 
+             if not current_on:
+-                ok_cmd = await run.io_bound(tuya_local.set_switch, dev_key, True)
+-                if ok_cmd:
+-                    await run.io_bound(db.insert_state_change, dev_id, cfg["name"], True)
+-                    server_off_confirm["pending"] = False
+-                    # Update button UI immediately
+-                    toggle_btn.classes(remove="plug-toggle-on plug-toggle-off plug-toggle-warn").classes("plug-toggle-on")
+-                    toggle_btn.set_text("● ON")
+-                    if warn_ref:
+-                        warn_ref.style("display:none")
+-                    card_el.classes(add="plug-on")
+-                    ui.notify("✅ Turned ON", type="positive")
+-                else:
+-                    ui.notify("⚠ Command failed", type="warning")
++                # Turn ON (mock)
++                with plug_lock:
++                    if plug_state[dev_key]["status"]:
++                        plug_state[dev_key]["status"]["switch"] = True
++                server_off_confirm["pending"] = False
++                # Update button UI immediately
++                toggle_btn.classes(remove="plug-toggle-on plug-toggle-off plug-toggle-warn").classes("plug-toggle-on")
++                toggle_btn.set_text("● ON")
++                if warn_ref:
++                    warn_ref.style("display:none")
++                card_el.classes(add="plug-on")
++                ui.notify("✅ Turned ON (Mock)", type="positive")
+                 return
+ 
+             if is_server and not server_off_confirm["pending"]:
+@@ -924,20 +830,18 @@
+                 ui.notify("⚠ Server plug — click again to confirm OFF", type="warning")
+                 return
+ 
+-            ok_cmd = await run.io_bound(tuya_local.set_switch, dev_key, False)
+-            if ok_cmd:
+-                await run.io_bound(db.insert_state_change, dev_id, cfg["name"], False)
+-                server_off_confirm["pending"] = False
+-                # Update button UI immediately
+-                toggle_btn.classes(remove="plug-toggle-on plug-toggle-off plug-toggle-warn").classes("plug-toggle-off")
+-                toggle_btn.set_text("○ OFF")
+-                if warn_ref:
+-                    warn_ref.style("display:none")
+-                card_el.classes(remove="plug-on")
+-                ui.notify("🔴 Turned OFF", type="negative")
+-            else:
+-                ui.notify("⚠ Command failed", type="warning")
+-                server_off_confirm["pending"] = False
++            # Actually turn off (mock)
++            with plug_lock:
++                if plug_state[dev_key]["status"]:
++                    plug_state[dev_key]["status"]["switch"] = False
++            server_off_confirm["pending"] = False
++            # Update button UI immediately
++            toggle_btn.classes(remove="plug-toggle-on plug-toggle-off plug-toggle-warn").classes("plug-toggle-off")
++            toggle_btn.set_text("○ OFF")
++            if warn_ref:
++                warn_ref.style("display:none")
++            card_el.classes(remove="plug-on")
++            ui.notify("🔴 Turned OFF (Mock)", type="negative")
+ 
+         # Energy strip
+         with ui.element("div").classes("plug-energy-row").style("margin-top:14px"):
+@@ -967,10 +871,10 @@
+ 
+             with ui.row().classes("gap-2 w-full"):
+                 ui.button("🔒 Lock ON",
+-                    on_click=lambda: _exec_cmd(dev_key, lambda: tuya_local.set_child_lock(dev_key, True), "Child Lock ON")
++                    on_click=lambda: ui.notify("✅ Child Lock ON (Mock)", type="positive")
+                 ).classes("plug-ctrl-btn")
+                 ui.button("🔓 Lock OFF",
+-                    on_click=lambda: _exec_cmd(dev_key, lambda: tuya_local.set_child_lock(dev_key, False), "Child Lock OFF")
++                    on_click=lambda: ui.notify("✅ Child Lock OFF (Mock)", type="positive")
+                 ).classes("plug-ctrl-btn")
+ 
+             with ui.row().classes("gap-2 items-end w-full").style("margin-top:10px"):
+@@ -978,9 +882,7 @@
+                     label="Countdown (seconds)", value=0, min=0, max=86400
+                 ).props("dense outlined").style("flex:1;font-size:.8rem")
+                 ui.button("Set",
+-                    on_click=lambda: _exec_cmd(dev_key,
+-                        lambda: tuya_local.set_countdown(dev_key, int(countdown_inp.value or 0)),
+-                        f"Timer {int(countdown_inp.value or 0)}s")
++                    on_click=lambda: ui.notify(f"✅ Timer {int(countdown_inp.value or 0)}s (Mock)", type="positive")
+                 ).props("dense").style("font-size:.72rem;padding:6px 14px")
+ 
+         # LED control
+@@ -989,16 +891,9 @@
+             with ui.row().classes("gap-2 w-full"):
+                 for label, val in [("Follow Relay", "relay"), ("Always ON", "pos"), ("Always OFF", "none")]:
+                     ui.button(label,
+-                        on_click=lambda v=val, l=label: _exec_cmd(dev_key,
+-                            lambda mode=v: tuya_local.set_led_mode(dev_key, mode),
+-                            f"LED → {l}")
++                        on_click=lambda l=label: ui.notify(f"✅ LED → {l} (Mock)", type="positive")
+                     ).classes("plug-led-btn")
+ 
+-    async def _exec_cmd(dk, fn, label):
+-        ok_cmd = await run.io_bound(fn)
+-        ui.notify(f"✅ {label}" if ok_cmd else f"⚠ {label} failed",
+-                  type="positive" if ok_cmd else "warning")
+-
+     return {
+         "card_el":       card_el,
+         "conn_dot":      conn_dot,
+@@ -1018,13 +913,11 @@
+ 
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
++#  RENDER PLUGS CONTENT
+ # ─────────────────────────────────────────────────────────────────────────────
+-#  TAB 3 — PLUGS
+-# ─────────────────────────────────────────────────────────────────────────────
+ def render_plugs_content():
+     with ui.column().classes('w-full gap-4 sm:gap-6'):
+ 
+-
+         with ui.row().classes('items-center gap-2 mb-2'):
+             ui.icon('electrical_services', color='positive')
+             ui.label('Device Control').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
+@@ -1066,9 +959,8 @@
+         refs["ref_current"].set_text(f"{s['current_ma']}")
+         refs["ref_total_kwh"].set_text(f"{s['add_ele_kwh']:.3f}")
+ 
+-        # Today's energy from cache — zero blocking
+-        with energy_cache_lock:
+-            today = energy_cache[dk].copy()
++        # Today's energy (mock)
++        today = mock_get_today_summary(refs["dev_id"])
+         refs["ref_today_kwh"].set_text(f"{today['total_kwh']:.4f}")
+         refs["ref_today_rm"].set_text(f"RM {today['cost_rm']:.4f}")
+ 
+@@ -1081,11 +973,11 @@
+         _update_panel(plug_refs)
+         _update_panel(server_refs)
+ 
+-    ui.timer(4.0, _refresh_plugs)
++    ui.timer(2.0, _refresh_plugs)
+ 
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
+-#  MAIN SPA PAGE  /
++#  MAIN SPA PAGE
+ # ─────────────────────────────────────────────────────────────────────────────
+ @ui.page('/')
+ def index_page():
+@@ -1094,7 +986,7 @@
+     add_common_styles()
+     ui.colors(primary='#3b82f6', secondary='#8b5cf6', accent='#ec4899',
+               positive='#10b981', warning='#f59e0b')
+-    
++
+     with ui.header().classes('glass-header items-center justify-between p-3 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
+         with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto sm:flex-1 justify-center sm:justify-start relative'):
+             ui.icon('dns', size='md', color='primary').classes('drop-shadow-md')
+@@ -1123,83 +1015,10 @@
+                 render_plugs_content()
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
+-#  ENERGY CACHE LOOP (runs in background thread, feeds UI timers)
+-# ─────────────────────────────────────────────────────────────────────────────
+-def energy_cache_loop():
+-    """Single background thread polls DB summaries every 10s, caches results.
+-    UI timers read from this cache instead of querying DB directly."""
+-    while True:
+-        for dev_key in ("plug", "server"):
+-            try:
+-                summary = db.get_today_summary(tuya_local.DEVICES[dev_key]["id"])
+-                with energy_cache_lock:
+-                    energy_cache[dev_key] = summary
+-            except Exception as e:
+-                print(f"[energy_cache] {dev_key}: {e}")
+-        time.sleep(10)
+-
+-
+-# ─────────────────────────────────────────────────────────────────────────────
+ #  STARTUP
+ # ─────────────────────────────────────────────────────────────────────────────
+ app.on_startup(lambda: asyncio.create_task(update_metrics()))
+ app.on_startup(lambda: asyncio.create_task(update_ai_insights()))
+ threading.Thread(target=plug_polling_loop, daemon=True).start()
+-threading.Thread(target=energy_cache_loop, daemon=True).start()
+ 
+-@ui.page('/cloud')
+-async def cloud_page():
+-    add_common_styles()
+-
+-    with ui.column().classes('w-full q-pa-md gap-6'):
+-
+-        ui.label('☁️ Cloud Monitor — AWS DynamoDB').classes('text-h4 text-bold q-mb-sm')
+-
+-        # ── Today's summary cards ──────────────────────────────────────────────
+-        ui.label("Today's Summary").classes('text-h6 text-grey-4')
+-        with ui.row().classes('w-full gap-4'):
+-            for dev_key, dev_name in [('plug', 'Smart Plug'), ('server', 'Server Plug')]:
+-                summary = cloud_db.get_today_summary(dev_key)
+-                with ui.card().classes('flex-1 q-pa-md'):
+-                    ui.label(dev_name).classes('text-subtitle1 text-bold q-mb-sm')
+-                    with ui.grid(columns=2).classes('w-full gap-2'):
+-                        for label, value in [
+-                            ('Readings',   str(summary['readings'])),
+-                            ('Total kWh',  f"{summary['total_kwh']:.5f}"),
+-                            ('Avg Watts',  f"{summary['avg_watts']} W"),
+-                            ('Peak Watts', f"{summary['peak_watts']} W"),
+-                        ]:
+-                            with ui.column().classes('gap-0'):
+-                                ui.label(label).classes('text-caption text-grey-5')
+-                                ui.label(value).classes('text-body1 text-bold')
+-
+-        ui.separator()
+-
+-        # ── Recent readings tables ─────────────────────────────────────────────
+-        COLUMNS = [
+-            {'name': 'ts', 'label': 'Timestamp',    'field': 'ts', 'align': 'left'},
+-            {'name': 'w',  'label': 'Watts',         'field': 'w',  'align': 'right'},
+-            {'name': 'v',  'label': 'Voltage (V)',   'field': 'v',  'align': 'right'},
+-            {'name': 'ma', 'label': 'Current (mA)',  'field': 'ma', 'align': 'right'},
+-            {'name': 'wh', 'label': 'Wh Δ',          'field': 'wh', 'align': 'right'},
+-            {'name': 'sw', 'label': 'Switch',        'field': 'sw', 'align': 'center'},
+-        ]
+-
+-        for dev_key, dev_name in [('plug', 'Smart Plug'), ('server', 'Server Plug')]:
+-            ui.label(f'{dev_name} — Last 15 Readings').classes('text-h6 q-mt-sm')
+-            readings = cloud_db.get_recent_readings(dev_key, limit=15)
+-
+-            if readings:
+-                rows = [{
+-                    'ts': r['timestamp'][:19].replace('T', ' '),
+-                    'w':  float(r.get('watts', 0)),
+-                    'v':  float(r.get('voltage', 0)),
+-                    'ma': int(float(r.get('current_ma', 0))),
+-                    'wh': round(float(r.get('wh_delta', 0)), 5),
+-                    'sw': '🟢 ON' if r.get('switch') else '🔴 OFF',
+-                } for r in readings]
+-                ui.table(columns=COLUMNS, rows=rows, row_key='ts').classes('w-full')
+-            else:
+-                ui.label('No data available').classes('text-grey')
+-
+-ui.run(host='0.0.0.0', port=3000, title='Homelab Dashboard', reload=False, favicon='🏠')
++ui.run(host='0.0.0.0', port=3000, title='Homelab Dashboard Design', reload=False, favicon='🏠')
+\ No newline at end of file

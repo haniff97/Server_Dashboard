@@ -1021,4 +1021,4 @@ app.on_startup(lambda: asyncio.create_task(update_metrics()))
 app.on_startup(lambda: asyncio.create_task(update_ai_insights()))
 threading.Thread(target=plug_polling_loop, daemon=True).start()
 
-ui.run(host='0.0.0.0', port=3000, title='Homelab Dashboard Design', reload=False, favicon='🏠')
+ui.run(host='0.0.0.0', port=3001, title='Homelab Dashboard Design', reload=False, favicon='🏠')

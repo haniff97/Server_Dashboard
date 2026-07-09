@@ -636,7 +636,7 @@ def render_energy_content():
         # ── Power history chart ──────────────────────────────────────────────
         chart_filter = {'value': 'Live'}
         with ui.element('div').classes('split-card w-full mb-6'):
-            with ui.column().classes('split-left flex flex-col justify-between gt-sm'):
+            with ui.column().classes('split-left flex flex-col justify-between hidden md:flex'):
                 with ui.column():
                     ui.label('Analytics').classes('text-xs font-bold uppercase tracking-widest opacity-80 mb-2')
                     ui.label('Energy\nTrends').classes('text-3xl font-black mt-2 whitespace-pre-line leading-tight')
@@ -658,40 +658,40 @@ def render_energy_content():
                         
                     ui.toggle(['Live', 'Day', 'Week', 'Month'], value='Live', on_change=on_filter_change).props('unelevated size=sm').classes('bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400')
 
-                area_chart = ui.echart({
-                    'tooltip': {
-                        'trigger': 'axis',
-                        'backgroundColor': 'rgba(15, 23, 42, 0.6)',
-                        'borderColor': 'rgba(255, 255, 255, 0.2)',
-                        'textStyle': {'color': '#f8fafc', 'fontFamily': 'Inter'}
-                    },
-                    'legend':  {'data': ['Power (W)'], 'textStyle': {'color': '#94a3b8'}, 'top': 0, 'right': 0},
-                    'grid':    {'left': '3%', 'right': '4%', 'bottom': '3%', 'containLabel': True},
-                    'xAxis':   [{'type': 'category', 'boundaryGap': False, 'data': [],
-                                 'axisLabel': {'color': '#94a3b8', 'rotate': 45},
-                                 'splitLine': {'show': True, 'lineStyle': {'color': 'rgba(255,255,255,0.05)'}} }],
-                    'yAxis':   [{'type': 'value', 'name': 'Watts',
-                                 'nameTextStyle': {'color': '#94a3b8'},
-                                 'axisLabel': {'color': '#94a3b8'},
-                                 'splitLine': {'show': True, 'lineStyle': {'color': 'rgba(255,255,255,0.05)'}} }],
-                    'series':  [{'name': 'Power (W)', 'type': 'line', 'smooth': True,
-                                 'lineStyle': {
-                                     'color': '#8b5cf6',
-                                     'width': 3,
-                                     'shadowColor': 'rgba(139, 92, 246, 0.5)',
-                                     'shadowBlur': 10
-                                 },
-                                 'areaStyle': {'color': {
-                                     'type': 'linear', 'x': 0, 'y': 0, 'x2': 0, 'y2': 1,
-                                     'colorStops': [
-                                         {'offset': 0, 'color': 'rgba(139, 92, 246, 0.4)'},
-                                         {'offset': 1, 'color': 'rgba(139, 92, 246, 0.0)'},
-                                     ],
-                                 }},
-                                 'itemStyle': {'color': '#8b5cf6', 'borderColor': '#fff', 'borderWidth': 2},
-                                 'symbolSize': 6,
-                                 'data': []}],
-                }).classes('w-full h-[300px]')
+            area_chart = ui.echart({
+                'tooltip': {
+                    'trigger': 'axis',
+                    'backgroundColor': 'rgba(15, 23, 42, 0.6)',
+                    'borderColor': 'rgba(255, 255, 255, 0.2)',
+                    'textStyle': {'color': '#f8fafc', 'fontFamily': 'Inter'}
+                },
+                'legend':  {'data': ['Power (W)'], 'textStyle': {'color': '#94a3b8'}, 'top': 0, 'right': 0},
+                'grid':    {'left': '3%', 'right': '4%', 'bottom': '3%', 'containLabel': True},
+                'xAxis':   [{'type': 'category', 'boundaryGap': False, 'data': [],
+                             'axisLabel': {'color': '#94a3b8', 'rotate': 45},
+                             'splitLine': {'show': True, 'lineStyle': {'color': 'rgba(255,255,255,0.05)'}} }],
+                'yAxis':   [{'type': 'value', 'name': 'Watts',
+                             'nameTextStyle': {'color': '#94a3b8'},
+                             'axisLabel': {'color': '#94a3b8'},
+                             'splitLine': {'show': True, 'lineStyle': {'color': 'rgba(255,255,255,0.05)'}} }],
+                'series':  [{'name': 'Power (W)', 'type': 'line', 'smooth': True,
+                             'lineStyle': {
+                                 'color': '#8b5cf6',
+                                 'width': 3,
+                                 'shadowColor': 'rgba(139, 92, 246, 0.5)',
+                                 'shadowBlur': 10
+                             },
+                             'areaStyle': {'color': {
+                                 'type': 'linear', 'x': 0, 'y': 0, 'x2': 0, 'y2': 1,
+                                 'colorStops': [
+                                     {'offset': 0, 'color': 'rgba(139, 92, 246, 0.4)'},
+                                     {'offset': 1, 'color': 'rgba(139, 92, 246, 0.0)'},
+                                 ],
+                             }},
+                             'itemStyle': {'color': '#8b5cf6', 'borderColor': '#fff', 'borderWidth': 2},
+                             'symbolSize': 6,
+                             'data': []}],
+            }).classes('w-full h-[300px]')
 
         async def update_energy_stats():
             dk = selected_device['value']
