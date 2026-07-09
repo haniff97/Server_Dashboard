@@ -755,14 +755,14 @@ def render_energy_content():
                         if dk == 'all':
                             pts1 = await run.io_bound(db.get_hourly_history, tuya_local.DEVICES["plug"]["id"], 24)
                             pts2 = await run.io_bound(db.get_hourly_history, tuya_local.DEVICES["server"]["id"], 24)
-                            d1 = {p["hour_str"]: p["kwh"] for p in pts1}
-                            d2 = {p["hour_str"]: p["kwh"] for p in pts2}
+                            d1 = {p["hour_str"]: (p["kwh"] or 0) for p in pts1}
+                            d2 = {p["hour_str"]: (p["kwh"] or 0) for p in pts2}
                             all_hours = sorted(list(set(d1.keys()) | set(d2.keys())))
                             pts = [{"hour_str": h, "kwh": d1.get(h, 0) + d2.get(h, 0)} for h in all_hours]
                         else:
                             pts = await run.io_bound(db.get_hourly_history, tuya_local.DEVICES[dk]["id"], 24)
                         labels = [datetime.strptime(p["hour_str"], "%Y-%m-%d %H:%M:%S").strftime("%H:00") for p in pts]
-                        values = [round(p["kwh"], 3) for p in pts]
+                        values = [round((p["kwh"] or 0), 3) for p in pts]
                         area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
                         area_chart.options['series'][0]['name'] = 'Energy (kWh)'
 
@@ -771,14 +771,14 @@ def render_energy_content():
                         if dk == 'all':
                             pts1 = await run.io_bound(db.get_daily_history, tuya_local.DEVICES["plug"]["id"], days_limit)
                             pts2 = await run.io_bound(db.get_daily_history, tuya_local.DEVICES["server"]["id"], days_limit)
-                            d1 = {str(p["date_str"]): p["kwh"] for p in pts1}
-                            d2 = {str(p["date_str"]): p["kwh"] for p in pts2}
+                            d1 = {str(p["date_str"]): (p["kwh"] or 0) for p in pts1}
+                            d2 = {str(p["date_str"]): (p["kwh"] or 0) for p in pts2}
                             all_days = sorted(list(set(d1.keys()) | set(d2.keys())))
                             pts = [{"date_str": d, "kwh": d1.get(d, 0) + d2.get(d, 0)} for d in all_days]
                         else:
                             pts = await run.io_bound(db.get_daily_history, tuya_local.DEVICES[dk]["id"], days_limit)
                         labels = [datetime.strptime(str(p["date_str"]), "%Y-%m-%d").strftime("%b %d") for p in pts]
-                        values = [round(p["kwh"], 3) for p in pts]
+                        values = [round((p["kwh"] or 0), 3) for p in pts]
                         area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
                         area_chart.options['series'][0]['name'] = 'Energy (kWh)'
                         
