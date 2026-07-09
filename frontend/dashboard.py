@@ -811,28 +811,28 @@ def _plug_chart_options(dev_key: str) -> dict:
         "backgroundColor": "transparent",
         "tooltip": {
             "trigger": "axis",
-            "backgroundColor": "#1e293b", "borderColor": "#334155",
-            "textStyle": {"color": "#f8fafc", "fontFamily": "Courier New", "fontSize": 11},
+            "backgroundColor": "rgba(15, 23, 42, 0.8)", "borderColor": "rgba(255, 255, 255, 0.1)",
+            "textStyle": {"color": "#f8fafc", "fontFamily": "Inter", "fontSize": 11},
         },
         "grid": {"left": "9%", "right": "3%", "top": "10%", "bottom": "20%"},
         "xAxis": {
             "type": "category", "data": labels,
             "axisLabel": {"color": "#94a3b8", "fontSize": 9, "rotate": 35},
-            "axisLine": {"lineStyle": {"color": "#334155"}},
+            "axisLine": {"lineStyle": {"color": "rgba(0,0,0,0.1)"}},
         },
         "yAxis": {
             "type": "value",
             "axisLabel": {"color": "#94a3b8", "fontSize": 9},
-            "splitLine": {"lineStyle": {"color": "#334155", "type": "dashed"}},
+            "splitLine": {"lineStyle": {"color": "rgba(0,0,0,0.05)", "type": "dashed"}},
         },
         "series": [{
             "data": values, "type": "line", "smooth": True, "symbol": "none",
-            "lineStyle": {"color": "#10b981", "width": 2},
+            "lineStyle": {"color": "#E11D48", "width": 2},
             "areaStyle": {"color": {
                 "type": "linear", "x": 0, "y": 0, "x2": 0, "y2": 1,
                 "colorStops": [
-                    {"offset": 0, "color": "rgba(16,185,129,.28)"},
-                    {"offset": 1, "color": "rgba(16,185,129,.02)"},
+                    {"offset": 0, "color": "rgba(225,29,72,.28)"},
+                    {"offset": 1, "color": "rgba(225,29,72,.02)"},
                 ],
             }},
         }],
