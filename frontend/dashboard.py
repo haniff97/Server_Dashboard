@@ -31,6 +31,18 @@ import tuya_local
 import db
 import aws_iot_publisher
 import cloud_db
+import json
+import paho.mqtt.client as mqtt_client
+
+# ── Local MQTT publisher (for infra agent spike detection) ──────────────────
+def publish_local_mqtt(device_key: str, watts: float) -> None:
+    try:
+        c = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2)
+        c.connect("localhost", 1883, keepalive=5)
+        c.publish("plug/readings", json.dumps({"device_key": device_key, "watts": watts}), qos=0)
+        c.disconnect()
+    except Exception as e:
+        print(f"[local_mqtt] publish error: {e}")
 # ─────────────────────────────────────────────────────────────────────────────
 #  PROMETHEUS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -421,6 +433,7 @@ def plug_polling_loop():
                     try:
                         # Publish to AWS IoT Core
                         aws_iot_publisher.publish(dev_key, status, wh_delta)
+                        publish_local_mqtt(dev_key, status["watts"])
                         
                         db.insert_energy(
                             device_id=tuya_local.DEVICES[dev_key]["id"],
