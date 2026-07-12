@@ -1132,12 +1132,13 @@ def energy_cache_loop():
         for dev_key in ("plug", "server"):
             try:
                 summary = db.get_today_summary(tuya_local.DEVICES[dev_key]["id"])
+                db.aggregate_monthly(tuya_local.DEVICES[dev_key]["id"])
+                monthly = db.get_monthly_history(tuya_local.DEVICES[dev_key]["id"], months=1)
+                month_kwh = float(monthly[0]["total_kwh"]) if monthly else summary["total_kwh"]
                 with energy_cache_lock:
-                    energy_cache[dev_key] = summary
+                    energy_cache[dev_key] = {**summary, "month_kwh": month_kwh}
             except Exception as e:
                 print(f"[energy_cache] {dev_key}: {e}")
-        time.sleep(10)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  STARTUP
@@ -1146,6 +1147,16 @@ app.on_startup(lambda: asyncio.create_task(update_metrics()))
 app.on_startup(lambda: asyncio.create_task(update_ai_insights()))
 threading.Thread(target=plug_polling_loop, daemon=True).start()
 threading.Thread(target=energy_cache_loop, daemon=True).start()
+
+try:
+                summary = db.get_today_summary(tuya_local.DEVICES[dev_key]["id"])
+                db.aggregate_monthly(tuya_local.DEVICES[dev_key]["id"])
+                monthly = db.get_monthly_history(tuya_local.DEVICES[dev_key]["id"], months=1)
+                month_kwh = float(monthly[0]["total_kwh"]) if monthly else summary["total_kwh"]
+                with energy_cache_lock:
+                    energy_cache[dev_key] = {**summary, "month_kwh": month_kwh}
+            except Exception as e:
+                print(f"[energy_cache] {dev_key}: {e}")
 
 @ui.page('/cloud')
 async def cloud_page():
