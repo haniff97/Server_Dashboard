@@ -80,7 +80,12 @@ energy_cache_lock = threading.Lock()
 # ─────────────────────────────────────────────────────────────────────────────
 #  GLOBAL STATE — Network Monitor
 # ─────────────────────────────────────────────────────────────────────────────
-NETWORK_TARGETS = ["8.8.8.8", "facebook.com", "youtube.com"]
+NETWORK_TARGETS = ["8.8.8.8", "fast.com", "youtube.com"]
+NETWORK_TARGET_LABELS = {
+    "8.8.8.8":    "Google",
+    "fast.com":   "Fast.com",
+    "youtube.com": "YouTube",
+}
 NETWORK_PROBE_INTERVAL  = 10    # seconds between ping cycles
 NETWORK_TRACEROUTE_HOPS = 20   # max hops for traceroute
 NETWORK_AI_INTERVAL     = 300  # seconds between Gemini network analyses
@@ -1418,7 +1423,7 @@ def render_network_content():
                     with network_lock:
                         init_series = [
                             {
-                                'name': target,
+                                'name': NETWORK_TARGET_LABELS.get(target, target),
                                 'type': 'line', 'smooth': True, 'showSymbol': False,
                                 'data': list(network_state['targets'][target]['history'])
                             }
@@ -1428,7 +1433,7 @@ def render_network_content():
                     chart = ui.echart({
                         'tooltip': {'trigger': 'axis'},
                         'legend': {
-                            'data': NETWORK_TARGETS,
+                            'data': [NETWORK_TARGET_LABELS.get(t, t) for t in NETWORK_TARGETS],
                             'textStyle': {'color': '#94a3b8'},
                             'bottom': 0
                         },
@@ -1456,7 +1461,7 @@ def render_network_content():
                         with ui.card().classes(
                             'glass-card items-center text-center p-4 transition-all'
                         ) as c:
-                            ui.label(target).classes(
+                            ui.label(NETWORK_TARGET_LABELS.get(target, target)).classes(
                                 'text-sm font-medium text-slate-500 dark:text-gray-400 mb-1')
                             lat_label  = ui.label('— ms').classes(
                                 'text-2xl font-bold text-slate-800 dark:text-white')
