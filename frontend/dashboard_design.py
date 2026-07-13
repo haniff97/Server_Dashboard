@@ -29,6 +29,46 @@ ai_insights = "🤖 Initializing AI analysis...\n💡 Gathering system data..."
 last_update = ""
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  GLOBAL STATE — Network (MOCKED)
+# ─────────────────────────────────────────────────────────────────────────────
+network_state = {
+    "health": "GOOD",
+    "targets": {
+        "Google": {"latency": 15.2, "packet_loss": 0.0, "status": "ok", "history": deque([15.0]*60, maxlen=60)},
+        "fast.com": {"latency": 12.4, "packet_loss": 0.0, "status": "ok", "history": deque([12.0]*60, maxlen=60)},
+        "youtube.com": {"latency": 18.5, "packet_loss": 0.0, "status": "ok", "history": deque([18.0]*60, maxlen=60)}
+    },
+    "route_log": [
+        f"{datetime.now().strftime('%H:%M:%S')} - Initial routes established.",
+        f"{datetime.now().strftime('%H:%M:%S')} - No anomalies detected."
+    ],
+    "ai_insights": "🤖 Network AI Active...\n💡 All routes stable. Latency is optimal."
+}
+
+def update_network_mock_data():
+    """Simulate network metrics"""
+    for target, data in network_state["targets"].items():
+        data["latency"] = max(5.0, min(150.0, data["latency"] + random.uniform(-2, 2)))
+        data["history"].append(data["latency"])
+        
+        if random.random() > 0.98:
+            data["packet_loss"] = round(random.uniform(1.0, 5.0), 1)
+            data["status"] = "warn"
+            network_state["health"] = "WARNING"
+            network_state["route_log"].insert(0, f"{datetime.now().strftime('%H:%M:%S')} - Packet loss ({data['packet_loss']}%) detected on {target}")
+            network_state["ai_insights"] = f"⚠️ Anomaly Detected!\nPacket loss on {target} suggests ISP congestion or hop failure. Traceroute triggered."
+        else:
+            data["packet_loss"] = 0.0
+            data["status"] = "ok"
+            
+    if all(d["status"] == "ok" for d in network_state["targets"].values()):
+        network_state["health"] = "GOOD"
+        network_state["ai_insights"] = "🤖 Network AI Active...\n💡 All routes stable. Latency is optimal."
+    
+    if len(network_state["route_log"]) > 10:
+        network_state["route_log"].pop()
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  MOCK DEVICE CONFIG (mirrors tuya_local.DEVICES)
 # ─────────────────────────────────────────────────────────────────────────────
 MOCK_DEVICES = {
@@ -977,6 +1017,110 @@ def render_plugs_content():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  RENDER NETWORK CONTENT
+# ─────────────────────────────────────────────────────────────────────────────
+def render_network_content():
+    with ui.column().classes('w-full gap-4 sm:gap-6'):
+        with ui.row().classes('items-center gap-2 mb-2 w-full'):
+            ui.icon('router', color='primary').classes('text-2xl')
+            ui.label('Network Monitor').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
+            health_badge = ui.badge('GOOD', color='positive').classes('ml-auto font-bold px-3 py-1 text-sm rounded-full shadow-sm')
+
+        with ui.grid().classes('w-full gap-6 grid-cols-1 lg:grid-cols-3'):
+            # Left Column (Charts & Metrics)
+            with ui.column().classes('col-span-1 lg:col-span-2 gap-4'):
+                # Latency Chart
+                with ui.card().classes('glass-card w-full p-4'):
+                    with ui.row().classes('w-full justify-between items-center mb-2'):
+                        ui.label('Live Latency (ms)').classes('font-semibold text-slate-700 dark:text-gray-300')
+                        ui.icon('timeline', color='gray-400')
+                    
+                    chart = ui.echart({
+                        'tooltip': {'trigger': 'axis'},
+                        'legend': {'data': list(network_state["targets"].keys()), 'textStyle': {'color': '#94a3b8'}, 'bottom': 0},
+                        'grid': {'left': '3%', 'right': '4%', 'bottom': '15%', 'top': '5%', 'containLabel': True},
+                        'xAxis': {'type': 'category', 'boundaryGap': False, 'show': False, 'data': list(range(60))},
+                        'yAxis': {'type': 'value', 'splitLine': {'lineStyle': {'color': '#334155'}}},
+                        'series': [
+                            {'name': target, 'type': 'line', 'smooth': True, 'showSymbol': False, 'data': list(data["history"])}
+                            for target, data in network_state["targets"].items()
+                        ],
+                        'color': ['#3b82f6', '#10b981', '#f59e0b']
+                    }).classes('w-full h-64')
+
+                # Targets Status Grid
+                target_cards = {}
+                with ui.grid().classes('w-full gap-4 grid-cols-1 sm:grid-cols-3'):
+                    for target in network_state["targets"].keys():
+                        with ui.card().classes('glass-card items-center text-center p-4 transition-all') as c:
+                            ui.label(target).classes('text-sm font-medium text-slate-500 dark:text-gray-400 mb-1')
+                            lat_label = ui.label('0.0 ms').classes('text-2xl font-bold text-slate-800 dark:text-white')
+                            loss_label = ui.label('0.0% loss').classes('text-xs text-positive font-semibold mt-1 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded')
+                            target_cards[target] = {'lat': lat_label, 'loss': loss_label, 'card': c}
+
+            # Right Column (AI & Logs)
+            with ui.column().classes('col-span-1 gap-4'):
+                # AI Insights
+                with ui.card().classes('glass-card w-full relative overflow-hidden p-4'):
+                    ui.html('<div class="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-blue-500/5 z-0 pointer-events-none"></div>')
+                    with ui.row().classes('w-full justify-between items-center mb-3 z-10'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('auto_awesome', color='purple-400').classes('animate-pulse')
+                            ui.label('AI Insights').classes('font-bold text-purple-700 dark:text-purple-400')
+                    ai_label = ui.label(network_state["ai_insights"]).classes('text-sm text-slate-600 dark:text-gray-300 z-10 whitespace-pre-line leading-relaxed')
+
+                # Action Buttons
+                with ui.card().classes('glass-card w-full p-4'):
+                    ui.label('Actions').classes('font-semibold text-slate-700 dark:text-gray-300 mb-3')
+                    with ui.button('Generate ISP Report', icon='description', color='primary').props('unelevated rounded outline').classes('w-full mb-2 shadow-sm'):
+                        ui.tooltip('Calls Gemini to generate a formal ISP accountability report')
+                    with ui.button('Run Manual Traceroute', icon='route', color='secondary').props('unelevated rounded outline').classes('w-full shadow-sm'):
+                        pass
+
+                # Route Log
+                with ui.card().classes('glass-card w-full flex-grow p-4'):
+                    with ui.row().classes('w-full items-center gap-2 mb-3'):
+                        ui.icon('list_alt', color='gray-400')
+                        ui.label('Route Events').classes('font-semibold text-slate-700 dark:text-gray-300')
+                    log_container = ui.column().classes('w-full text-xs font-mono text-slate-600 dark:text-gray-400 gap-2')
+                    for log in network_state["route_log"]:
+                        with log_container:
+                            ui.label(log)
+
+    # ── Live update timer ────────────────────────────────────────────────
+    def _refresh_network():
+        update_network_mock_data()
+        
+        health = network_state["health"]
+        health_badge.set_text(health)
+        health_badge.props(f'color={"positive" if health == "GOOD" else "warning" if health == "WARNING" else "negative"}')
+        
+        for i, (target, data) in enumerate(network_state["targets"].items()):
+            chart.options['series'][i]['data'] = list(data["history"])
+        chart.update()
+        
+        for target, elements in target_cards.items():
+            data = network_state["targets"][target]
+            elements['lat'].set_text(f"{data['latency']:.1f} ms")
+            elements['loss'].set_text(f"{data['packet_loss']:.1f}% loss")
+            
+            if data['packet_loss'] > 0:
+                elements['loss'].classes(replace='text-xs text-negative font-semibold mt-1 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded animate-pulse')
+                elements['card'].classes(add='border-2 border-red-500/50')
+            else:
+                elements['loss'].classes(replace='text-xs text-positive font-semibold mt-1 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded')
+                elements['card'].classes(remove='border-2 border-red-500/50')
+
+        ai_label.set_text(network_state["ai_insights"])
+        
+        log_container.clear()
+        for log in network_state["route_log"]:
+            with log_container:
+                ui.label(log)
+
+    ui.timer(2.0, _refresh_network)
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  MAIN SPA PAGE
 # ─────────────────────────────────────────────────────────────────────────────
 @ui.page('/')
@@ -996,7 +1140,7 @@ def index_page():
         
         with ui.row().classes('items-center justify-center z-10 w-full sm:w-auto sm:flex-1 mt-3 sm:mt-0'):
             toggle = ui.toggle(
-                ['Server', 'Energy', 'Plugs'], value='Server'
+                ['Server', 'Energy', 'Plugs', 'Network'], value='Server'
             ).props('unelevated rounded').classes('q-btn-group').style('border-radius: 20px; font-weight: 600;')
 
         with ui.row().classes('items-center justify-end gap-4 z-10 gt-xs sm:flex-1'):
@@ -1013,6 +1157,8 @@ def index_page():
                 render_energy_content()
             with ui.tab_panel('Plugs').classes('p-0'):
                 render_plugs_content()
+            with ui.tab_panel('Network').classes('p-0'):
+                render_network_content()
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  STARTUP
