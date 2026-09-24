@@ -38,3 +38,16 @@ actions-runner/
 claude.md
 
 claude.md
+certs/
+devices.json
+snapshot.json
+tinytuya.json
+tuya-raw.json
+gemini_network_cache.txt
+frontend/core
+backend/core
+devices.json
+snapshot.json
+tinytuya.json
+tuya-raw.json
+gemini_network_cache.txt

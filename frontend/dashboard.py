@@ -74,9 +74,11 @@ last_update   = ""
 PLUG_POLL_INTERVAL = 10  # seconds
 
 plug_state: Dict[str, Dict[str, Any]] = {
-    "plug":   {"status": None, "ok": False, "history": deque(maxlen=120)},
-    "server": {"status": None, "ok": False, "history": deque(maxlen=120)},
+    "plug":      {"status": None, "ok": False, "history": deque(maxlen=120)},
+    "server":    {"status": None, "ok": False, "history": deque(maxlen=120)},
+    "extension": {"status": None, "ok": False, "history": deque(maxlen=120)},
 }
+
 plug_lock = threading.Lock()
 db_error_notified = False
 
@@ -239,35 +241,32 @@ def _fetch_network_metrics() -> dict:
 
 
 def _call_gemini_network(summary: str) -> str:
-    """
-    Calls Gemini API with a network health summary prompt.
-    Writes result to NETWORK_AI_CACHE_PATH (same pattern as main AI loop).
-    Returns the AI response string.
-    """
-    if not GEMINI_API_KEY:
-        return "⚠️ GEMINI_API_KEY not set — AI diagnosis unavailable."
+    """Network diagnosis via DeepSeek — button-triggered only."""
+    api_key = os.getenv("DEEPSEEK_API_KEY", "")
+    if not api_key:
+        return "⚠️ DEEPSEEK_API_KEY not set."
     try:
-        import urllib.request, json
-        url = ("https://generativelanguage.googleapis.com/v1beta/models/"
-               "gemini-2.5-flash:generateContent?key=" + GEMINI_API_KEY)
+        import requests as _req
         prompt = (
             "You are a network SRE assistant. Analyse the following homelab network probe data "
             "and give a concise 2–4 sentence diagnosis. State if the issue is internal (LAN/router) "
             "or external (ISP/BGP). If all healthy, confirm it briefly.\n\n"
             f"{summary}"
         )
-        payload = json.dumps({"contents": [{"parts": [{"text": prompt}]}]})
-        req = urllib.request.Request(
-            url, data=payload.encode(), method="POST",
-            headers={"Content-Type": "application/json"}
+        resp = _req.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}], "max_tokens": 200},
+            timeout=30,
         )
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            data = json.loads(resp.read())
-        text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        resp.raise_for_status()
+        text = resp.json()["choices"][0]["message"]["content"].strip()
         ts = datetime.now().strftime("%H:%M")
         with open(NETWORK_AI_CACHE_PATH, "w") as f:
             f.write(text)
         return f"🕒 Last Analysis: {ts}\n\n{text}"
+    except Exception as e:
+        return f"❌ DeepSeek error: {str(e)[:60]}"
     except Exception as e:
         print(f"[network AI] error: {e}")
         return f"❌ AI Error: {e}"
@@ -370,30 +369,9 @@ async def update_network_state():
                 )
                 await run.io_bound(_send_telegram_alert, alert_msg)
 
-            # --- Periodic Gemini AI analysis ---
-            now = time.time()
-            with network_lock:
-                last_ai = network_state["last_ai_run"]
-                should_ai = (now - last_ai >= NETWORK_AI_INTERVAL) or (not all_ok and not was_anomaly)
-
-            if should_ai:
-                with network_lock:
-                    summary_lines = []
-                    for t, td in network_state["targets"].items():
-                        summary_lines.append(
-                            f"{t}: latency={td['latency']:.1f}ms, "
-                            f"jitter={td['jitter']:.1f}ms, "
-                            f"packet_loss={td['packet_loss']:.1f}%"
-                        )
-                    route_snapshot = "\n".join(network_state["route_log"][:5])
-                    summary = "\n".join(summary_lines)
-                    if route_snapshot:
-                        summary += f"\n\nRecent events:\n{route_snapshot}"
-
-                ai_text = await run.io_bound(_call_gemini_network, summary)
-                with network_lock:
-                    network_state["ai_insights"] = ai_text
-                    network_state["last_ai_run"] = now
+            # --- Periodic Gemini AI analysis DISABLED ---
+            # AI now runs only on Network tab open or manual refresh button.
+            # Removed auto-poll (was every 300s + on anomaly = ~$0.06/day).
 
         except Exception as e:
             print(f"❌ Network monitor error: {e}")
@@ -405,10 +383,10 @@ async def update_network_state():
 # ─────────────────────────────────────────────────────────────────────────────
 def plug_polling_loop():
     """Poll both smart plugs via tinytuya and store to DB."""
-    last_poll_time: Dict[str, Optional[float]] = {"plug": None, "server": None}
-
+    last_poll_time: Dict[str, Optional[float]] = {"plug": None, "server": None, "extension": None}
+    
     while True:
-        for dev_key in ("plug", "server"):
+        for dev_key in ("plug", "server", "extension"):
             status = tuya_local.get_status(dev_key)
             now = time.time()
 
@@ -450,7 +428,6 @@ def plug_polling_loop():
                     plug_state[dev_key]["ok"] = False
 
         time.sleep(PLUG_POLL_INTERVAL)
-
 # ─────────────────────────────────────────────────────────────────────────────
 #  SYSTEM METRICS LOOP
 # ─────────────────────────────────────────────────────────────────────────────
@@ -518,19 +495,31 @@ async def update_metrics():
 #  AI INSIGHTS LOOP
 # ─────────────────────────────────────────────────────────────────────────────
 async def update_ai_insights():
+    """Reads cached analysis from disk — no auto-generation, button-triggered only."""
     global ai_insights
     while True:
         try:
             if os.path.exists(AI_CACHE_PATH):
                 mtime = datetime.fromtimestamp(os.path.getmtime(AI_CACHE_PATH))
                 with open(AI_CACHE_PATH, "r") as f:
-                    content = f.read()
-                ai_insights = f"🕒 Last Analysis: {mtime.strftime('%H:%M')}\n\n{content}"
+                    cached = f.read()
+                ai_insights = f"🕒 Last Analysis: {mtime.strftime('%H:%M')}\n\n{cached}"
             else:
-                ai_insights = "🤖 Waiting for Gemini..."
+                ai_insights = "🤖 Click 'Generate Analysis' to run a system summary."
         except Exception as e:
             ai_insights = f"❌ AI Read Error: {e}"
-        await asyncio.sleep(300)
+        await asyncio.sleep(30)
+
+
+def _run_deepseek_analysis() -> str:
+    """Called by the Generate Analysis button. Uses DeepSeek."""
+    import sys
+    sys.path.insert(0, "/mnt/nvme/Projects/dashboard")
+    try:
+        from backend.gemini_ai import analyze_system
+        return analyze_system(triggered_by="manual")
+    except Exception as e:
+        return f"❌ Analysis error: {e}"
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  SHARED STYLES
@@ -846,8 +835,16 @@ def render_server_content():
             'border-l-4 border-slate-300 dark:border-white'):
             with ui.row().classes('items-start gap-4'):
                 with ui.column().classes('w-full'):
-                    ui.label('DeepMind Analysis').classes(
-                        'text-slate-900 dark:text-white text-sm font-bold uppercase tracking-widest mb-1')
+                    with ui.row().classes('items-center justify-between w-full mb-1'):
+                        ui.label('AI Analysis').classes(
+                            'text-slate-900 dark:text-white text-sm font-bold uppercase tracking-widest')
+                        async def generate_analysis():
+                            global ai_insights
+                            ai_insights = "⏳ Generating analysis..."
+                            result = await run.io_bound(_run_deepseek_analysis)
+                            ai_insights = f"🕒 {datetime.now().strftime('%H:%M')}\n\n{result}"
+                        ui.button('⚡ Generate', on_click=generate_analysis).props('dense flat').classes(
+                            'text-xs text-blue-500 dark:text-blue-400')
                     ui.label().bind_text_from(globals(), 'ai_insights').classes(
                         'text-slate-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed')
 
@@ -1401,6 +1398,22 @@ def index_page():
             ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
 
     with ui.column().classes('w-full max-w-7xl mx-auto px-4 sm:px-6 pt-0 pb-4 sm:pb-6 mt-0 gap-4 sm:gap-8'):
+        async def on_tab_change(e):
+            if e.value == 'Network':
+                with network_lock:
+                    summary_lines = []
+                    for t, td in network_state["targets"].items():
+                        summary_lines.append(
+                            f"{t}: latency={td['latency']:.1f}ms, "
+                            f"jitter={td['jitter']:.1f}ms, "
+                            f"packet_loss={td['packet_loss']:.1f}%"
+                        )
+                    summary = "\n".join(summary_lines)
+                ai_text = await run.io_bound(_call_gemini_network, summary)
+                with network_lock:
+                    network_state["ai_insights"] = ai_text
+
+        toggle.on_value_change(on_tab_change)
         with ui.tab_panels(toggle, value='Server').classes('w-full bg-transparent p-0'):
             with ui.tab_panel('Server').classes('p-0'):
                 render_server_content()
@@ -1654,15 +1667,6 @@ app.on_startup(lambda: asyncio.create_task(update_network_state()))
 threading.Thread(target=plug_polling_loop, daemon=True).start()
 threading.Thread(target=energy_cache_loop, daemon=True).start()
 
-try:
-                summary = db.get_today_summary(tuya_local.DEVICES[dev_key]["id"])
-                db.aggregate_monthly(tuya_local.DEVICES[dev_key]["id"])
-                monthly = db.get_monthly_history(tuya_local.DEVICES[dev_key]["id"], months=1)
-                month_kwh = float(monthly[0]["total_kwh"]) if monthly else summary["total_kwh"]
-                with energy_cache_lock:
-                    energy_cache[dev_key] = {**summary, "month_kwh": month_kwh}
-            except Exception as e:
-                print(f"[energy_cache] {dev_key}: {e}")
 
 @ui.page('/cloud')
 async def cloud_page():

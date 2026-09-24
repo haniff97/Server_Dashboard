@@ -6,7 +6,7 @@ No cloud dependency after initial key extraction.
 
 Devices:
   - Smart plug  (192.168.1.2)   -> full control
-  - Server plug (192.168.1.15)  -> full control + double-confirm off
+  - Server plug (192.168.1.3)  -> full control + double-confirm off
 """
 
 import os
@@ -19,23 +19,30 @@ load_dotenv()
 
 DEVICES = {
     "plug": {
-        "name":      "Smart Plug",
-        "id":        os.getenv("PLUG_ID"),
-        "ip":        os.getenv("PLUG_IP"),
-        "key":       os.getenv("PLUG_KEY"),
+        "name":      "Bedroom PC",
+        "id":        os.getenv("PC_PLUG_ID"),
+        "ip":        os.getenv("PC_PLUG_IP"),
+        "key":       os.getenv("PC_PLUG_KEY"),
         "version":   3.5,
         "is_server": False,
     },
     "server": {
-        "name":      "Server",
-        "id":        os.getenv("SERVER_PLUG_ID"),
-        "ip":        os.getenv("SERVER_PLUG_IP"),
-        "key":       os.getenv("SERVER_PLUG_KEY"),
+        "name":      "TV",
+        "id":        os.getenv("TV_PLUG_ID"),
+        "ip":        os.getenv("TV_PLUG_IP"),
+        "key":       os.getenv("TV_PLUG_KEY"),
         "version":   3.5,
-        "is_server": True,
+        "is_server": False,  # Changed to False so it doesn't do "Server double-confirm off"
     },
+    "extension": {
+        "name":      "Extension living room",
+        "id":        os.getenv("LR_EXTENSION_PLUG_ID"),
+        "ip":        os.getenv("LR_EXTENSION_PLUG_IP"),
+        "key":       os.getenv("LR_EXTENSION_PLUG_KEY"),
+        "version":   3.5,
+        "is_server": False,
+    }
 }
-
 # ── DPS key mapping (LN 2S metering plug) ─────────────────────────────────
 DPS_SWITCH  = "1"
 DPS_CURRENT = "18"   # mA
