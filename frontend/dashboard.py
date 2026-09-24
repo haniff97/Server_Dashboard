@@ -1328,7 +1328,74 @@ def render_plugs_content():
             confirm_desc = ui.label('').classes('text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-4')
             with ui.row().classes('w-full justify-end gap-2'):
                 ui.button('Cancel (Keep Running)', on_click=confirm_dialog.close).props('outline rounded text-color=grey')
-                
+                async def _confirm_off():
+                    dk = pending_off_dev['key']
+                    ok_cmd = await run.io_bound(tuya_local.set_switch, dk, False)
+                    if ok_cmd:
+                        await run.io_bound(db.insert_state_change, tuya_local.DEVICES[dk]["id"], tuya_local.DEVICES[dk]["name"], False)
+                        ui.notify(f"🔴 Power cut confirmed for {tuya_local.DEVICES[dk]['name']}", type='negative')
+                        _refresh_plugs()
+                    else:
+                        ui.notify(f"⚠ Command failed for {tuya_local.DEVICES[dk]['name']}", type='warning')
+                    confirm_dialog.close()
+                ui.button('Yes, Cut Power', color='negative', on_click=_confirm_off)
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  MAIN SPA PAGE  /
+# ─────────────────────────────────────────────────────────────────────────────
+@ui.page('/')
+def index_page():
+    dark_mode = ui.dark_mode()
+    dark_mode.enable()
+    add_common_styles()
+    ui.colors(primary='#3b82f6', secondary='#8b5cf6', accent='#ec4899',
+              positive='#10b981', warning='#f59e0b')
+    
+    with ui.header().classes('glass-header items-center justify-between p-3 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
+        with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto sm:flex-1 justify-center sm:justify-start relative'):
+            ui.icon('dns', size='md', color='primary').classes('drop-shadow-md')
+            ui.label('HOMELAB').classes('text-2xl font-bold tracking-tight text-slate-900 dark:text-white')
+            # Mobile-only dark mode button placed on the right edge
+            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('lt-sm absolute right-2 text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
+        
+        with ui.row().classes('items-center justify-center z-10 w-full sm:w-auto sm:flex-1 mt-3 sm:mt-0'):
+            toggle = ui.toggle(
+                ['Server', 'Energy', 'Plugs', 'Network'], value='Server'
+            ).props('unelevated rounded').classes('q-btn-group').style('border-radius: 20px; font-weight: 600;')
+
+        with ui.row().classes('items-center justify-end gap-4 z-10 gt-xs sm:flex-1'):
+            with ui.row().classes('items-center gap-2 bg-slate-200 dark:bg-slate-800 rounded-full px-3 py-1 gt-sm'):
+                ui.icon('schedule', size='xs', color='gray-400')
+                ui.label().bind_text_from(globals(), 'last_update').classes('text-sm text-slate-600 dark:text-gray-300 font-mono')
+            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
+
+    with ui.column().classes('w-full max-w-7xl mx-auto px-4 sm:px-6 pt-0 pb-4 sm:pb-6 mt-0 gap-4 sm:gap-8'):
+        async def on_tab_change(e):
+            if e.value == 'Network':
+                with network_lock:
+                    summary_lines = []
+                    for t, td in network_state["targets"].items():
+                        summary_lines.append(
+                            f"{t}: latency={td['latency']:.1f}ms, "
+                            f"jitter={td['jitter']:.1f}ms, "
+                            f"packet_loss={td['packet_loss']:.1f}%"
+                        )
+                    summary = "\n".join(summary_lines)
+                ai_text = await run.io_bound(_call_gemini_network, summary)
+                with network_lock:
+                    network_state["ai_insights"] = ai_text
+
+        toggle.on_value_change(on_tab_change)
+        with ui.tab_panels(toggle, value='Server').classes('w-full bg-transparent p-0'):
+            with ui.tab_panel('Server').classes('p-0'):
+                render_server_content()
+            with ui.tab_panel('Energy').classes('p-0'):
+                render_energy_content()
+            with ui.tab_panel('Plugs').classes('p-0'):
+                render_plugs_content()
+            with ui.tab_panel('Network').classes('p-0'):
+                render_network_content()
+
 
 def render_network_content():
     with ui.column().classes('w-full gap-4 sm:gap-6'):
