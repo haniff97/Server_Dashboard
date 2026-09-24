@@ -1307,38 +1307,67 @@ def _build_plug_panel(dev_key: str) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 def render_plugs_content():
 
-    async def _exec_cmd(dk, fn, label):
-        ok_cmd = await run.io_bound(fn)
-        ui.notify(f"✅ {label}" if ok_cmd else f"⚠ {label} failed",
-                  type="positive" if ok_cmd else "warning")
-    cards_data = {}
-    active_zone = {'val': 'All'}
-    active_status = {'val': 'All'}
-    search_query = {'val': ''}
-    pending_off_dev = {'key': None}
-    detail_modal_dev = {'key': 'server'}
-
     with ui.column().classes('w-full gap-4 sm:gap-6'):
 
-        # ── Safety Confirmation Modal for Critical Devices ───────────────────
-        with ui.dialog() as confirm_dialog, ui.card().classes('glass-card p-6 max-w-md w-full border-2 border-rose-500/40'):
-            with ui.row().classes('items-center gap-3 text-rose-500 mb-2'):
-                ui.icon('warning', size='md')
-                ui.label('Critical Infrastructure Protection').classes('text-lg font-bold text-slate-800 dark:text-white')
-            confirm_desc = ui.label('').classes('text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-4')
-            with ui.row().classes('w-full justify-end gap-2'):
-                ui.button('Cancel (Keep Running)', on_click=confirm_dialog.close).props('outline rounded text-color=grey')
-                async def _confirm_off():
-                    dk = pending_off_dev['key']
-                    ok_cmd = await run.io_bound(tuya_local.set_switch, dk, False)
-                    if ok_cmd:
-                        await run.io_bound(db.insert_state_change, tuya_local.DEVICES[dk]["id"], tuya_local.DEVICES[dk]["name"], False)
-                        ui.notify(f"🔴 Power cut confirmed for {tuya_local.DEVICES[dk]['name']}", type='negative')
-                        _refresh_plugs()
-                    else:
-                        ui.notify(f"⚠ Command failed for {tuya_local.DEVICES[dk]['name']}", type='warning')
-                    confirm_dialog.close()
-                ui.button('Yes, Cut Power', color='negative', on_click=_confirm_off)
+        with ui.row().classes('items-center gap-2 mb-2'):
+            ui.icon('electrical_services', color='positive')
+            ui.label('Device Control').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
+
+        with ui.grid().classes('w-full gap-6 grid-cols-1 lg:grid-cols-3'):
+            plug_refs      = _build_plug_panel("plug")
+            server_refs    = _build_plug_panel("server")
+            extension_refs = _build_plug_panel("extension")
+
+    # ── Live update timer ────────────────────────────────────────────────
+    def _update_panel(refs: dict):
+        dk = refs["dev_key"]
+        with plug_lock:
+            s  = plug_state[dk]["status"]
+            ok = plug_state[dk]["ok"]
+
+        refs["conn_dot"].classes(remove="dot-ok dot-err").classes("dot-ok" if ok else "dot-err")
+
+        if not s:
+            return
+
+        on = s["switch"]
+
+        # Toggle button (skip if warn-pending)
+        if not refs.get("server_off_confirm", {}).get("pending"):
+            refs["toggle_btn"].classes(
+                remove="plug-toggle-on plug-toggle-off plug-toggle-warn"
+            ).classes("plug-toggle-on" if on else "plug-toggle-off")
+            refs["toggle_btn"].set_text("● ON" if on else "○ OFF")
+
+        # Card on/off glow
+        if on:
+            refs["card_el"].classes(add="plug-on")
+        else:
+            refs["card_el"].classes(remove="plug-on")
+
+        # Live readings
+        refs["ref_watts"].set_text(f"{s['watts']:.1f}")
+        refs["ref_voltage"].set_text(f"{s['voltage']:.1f}")
+        refs["ref_current"].set_text(f"{s['current_ma']}")
+        refs["ref_total_kwh"].set_text(f"{s['add_ele_kwh']:.3f}")
+
+        # Today energy from cache — zero blocking
+        with energy_cache_lock:
+            today = energy_cache.get(dk, {}).copy()
+        refs["ref_today_kwh"].set_text(f"{today.get('total_kwh', 0):.4f}")
+        refs["ref_today_rm"].set_text(f"RM {today.get('cost_rm', 0):.4f}")
+
+        # Chart
+        new_opts = _plug_chart_options(dk)
+        refs["chart"].options.update(new_opts)
+        refs["chart"].update()
+
+    def _refresh_plugs():
+        _update_panel(plug_refs)
+        _update_panel(server_refs)
+        _update_panel(extension_refs)
+
+    ui.timer(4.0, _refresh_plugs)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  MAIN SPA PAGE  /
