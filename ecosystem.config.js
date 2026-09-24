@@ -2,15 +2,14 @@ module.exports = {
   apps: [
     {
       name: 'homelab-dashboard',
-      script: 'dashboard.py',
-      args: '/mnt/nvme/Projects/dashboard/frontend/dashboard.py',
-      cwd: '/mnt/nvme/Projects/dashboard/frontend',
+      script: 'app.py',
+      args: '/mnt/nvme/Projects/dashboard/app.py',
+      cwd: '/mnt/nvme/Projects/dashboard',
       interpreter: '/mnt/nvme/Projects/dashboard/venv/bin/python3',
       env_file: '/mnt/nvme/Projects/dashboard/.env',
       autorestart: true,
       watch: false,
       max_memory_restart: '500M',
-      env_file: '/mnt/nvme/Projects/dashboard/.env',
       env: {
         PYTHONUNBUFFERED: '1'
       },
