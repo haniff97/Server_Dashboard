@@ -621,58 +621,42 @@ def add_common_styles():
             body.body--dark .stat-label { color:#A1A1AA; }
 
             /* Plug page styles */
-            .plug-card { background:#FFFFFF; border:1px solid rgba(0,0,0,.05); border-radius:24px; overflow:hidden; transition:all .3s; box-shadow: 0 4px 20px rgba(0,0,0,0.03); }
-            body.body--dark .plug-card { background:#1A1A1A; border:none; box-shadow:none; }
-            .plug-card.plug-on { border: 1px solid rgba(225, 29, 72, 0.3); box-shadow:0 0 20px rgba(225, 29, 72, 0.1); }
-            body.body--dark .plug-card.plug-on { border: 1px solid rgba(57, 255, 20, 0.3); box-shadow:none; }
-            
-            .plug-stat-strip { display:flex; flex-wrap:wrap; gap:16px; align-items:center; background:#F9FAFB; border-radius:16px; padding:14px 18px; }
-            body.body--dark .plug-stat-strip { background:#222222; border:none; }
-            
+            .plug-card { background:#FFFFFF; border:1px solid rgba(0,0,0,.06); border-radius:20px; overflow:hidden; transition:all .3s; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+            body.body--dark .plug-card { background:#161b22; border:1px solid rgba(255,255,255,0.07); box-shadow: 0 4px 24px rgba(0,0,0,0.3); }
+            .plug-card.plug-on { border: 1px solid rgba(59, 130, 246, 0.25); box-shadow:0 0 20px rgba(59, 130, 246, 0.08); }
+            body.body--dark .plug-card.plug-on { border: 1px solid rgba(59, 130, 246, 0.3); box-shadow: 0 0 24px rgba(59, 130, 246, 0.12); }
+            .plug-stat-strip { display:flex; flex-wrap:wrap; gap:16px; align-items:center; background:rgba(0,0,0,0.03); border-radius:14px; padding:14px 18px; }
+            body.body--dark .plug-stat-strip { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.05); }
             .plug-stat-num { font-family:'Inter',sans-serif; font-size:1.4rem; font-weight:800; line-height:1; color:#111827; }
             body.body--dark .plug-stat-num { color:#FFFFFF; }
-            
             .plug-stat-lbl { font-size:.6rem; color:#6B7280; text-transform:uppercase; letter-spacing:.08em; margin-top:3px; font-weight: 700; }
-            body.body--dark .plug-stat-lbl { color:#A1A1AA; }
-            
-            .plug-sep { width:1px; height:36px; background:rgba(0,0,0,.05); }
-            body.body--dark .plug-sep { background:rgba(255,255,255,.05); }
-
+            body.body--dark .plug-stat-lbl { color:#6b7280; }
+            .plug-sep { width:1px; height:36px; background:rgba(0,0,0,.06); }
+            body.body--dark .plug-sep { background:rgba(255,255,255,.07); }
             .plug-toggle { width:100%; padding:14px 0!important; border-radius:999px!important; font-family:'Inter',sans-serif!important; font-size:.85rem!important; font-weight:700!important; letter-spacing:.05em!important; transition:all .3s ease!important; border:none!important;}
-            .plug-toggle-on  { background:#E11D48!important; color:#ffffff!important; box-shadow: 0 4px 15px rgba(225, 29, 72, 0.2)!important;}
-            body.body--dark .plug-toggle-on { background:#39FF14!important; color:#000000!important; box-shadow: none!important; }
-            .plug-toggle-off { background:#F3F4F6!important; color:#4B5563!important; }
-            body.body--dark .plug-toggle-off { background:#222222!important; color:#A1A1AA!important; }
-            .plug-toggle-warn { background:#FF5E00!important; color:#ffffff!important; box-shadow: 0 4px 15px rgba(255, 94, 0, 0.3)!important;}
-            body.body--dark .plug-toggle-warn { background:#FF5E00!important; color:#000000!important; box-shadow: none!important; }
-
-            .plug-energy-row { display:flex; flex-wrap:wrap; gap:10px; background:#F9FAFB; border-radius:16px; padding:14px 18px; }
-            body.body--dark .plug-energy-row { background:#222222; }
-
-            .plug-ctrl-btn { background:#F3F4F6!important; border:none!important; border-radius:999px!important; color:#4B5563!important; font-family:'Inter',sans-serif!important; font-weight:600!important; font-size:.75rem!important; padding:9px 16px!important; transition:all .2s!important; }
-            body.body--dark .plug-ctrl-btn { background:#222222!important; color:#E5E7EB!important; }
-            .plug-ctrl-btn:hover { background:#E5E7EB!important; color:#111827!important; }
-            body.body--dark .plug-ctrl-btn:hover { background:#333333!important; color:#FFFFFF!important; }
-
-            .plug-led-btn { background:#F3F4F6!important; border:none!important; border-radius:999px!important; color:#4B5563!important; font-weight:600!important; font-size:.7rem!important; padding:8px 12px!important; transition:all .2s!important; flex:1; min-width:70px; }
-            body.body--dark .plug-led-btn { background:#222222!important; color:#A1A1AA!important; }
-            .plug-led-btn:hover { background:#E5E7EB!important; color:#111827!important; }
-            body.body--dark .plug-led-btn:hover { background:#333333!important; color:#FFFFFF!important; }
-
-            .dot-ok  { width:10px;height:10px;border-radius:50%;background:#E11D48;display:inline-block; }
-            body.body--dark .dot-ok { background:#39FF14; }
-            .dot-err { width:10px;height:10px;border-radius:50%;background:#F87171;display:inline-block; }
-            body.body--dark .dot-err { background:#FF5E00; }
-
-            .plug-warn-banner { background:#FEF2F2; border-radius:16px; padding:12px 16px; margin-top:10px; font-family:'Inter',sans-serif; font-size:.75rem; color:#991B1B; font-weight:500; display:none; }
-            body.body--dark .plug-warn-banner { background:#431407; color:#FFEDD5; }
+            .plug-toggle-on  { background:#3B82F6!important; color:#ffffff!important; box-shadow: 0 4px 18px rgba(59,130,246,0.4)!important;}
+            body.body--dark .plug-toggle-on { background:#3B82F6!important; color:#ffffff!important; box-shadow: 0 4px 18px rgba(59,130,246,0.3)!important; }
+            .plug-toggle-off { background:rgba(0,0,0,0.05)!important; color:#6B7280!important; }
+            body.body--dark .plug-toggle-off { background:rgba(255,255,255,0.06)!important; color:#6b7280!important; }
+            .plug-toggle-warn { background:#f97316!important; color:#ffffff!important; box-shadow: 0 4px 15px rgba(249,115,22,0.35)!important;}
+            .plug-energy-row { display:flex; flex-wrap:wrap; gap:10px; background:rgba(0,0,0,0.03); border-radius:14px; padding:14px 18px; }
+            body.body--dark .plug-energy-row { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.05); }
+            .plug-ctrl-btn { background:rgba(0,0,0,0.04)!important; border:none!important; border-radius:999px!important; color:#4B5563!important; font-family:'Inter',sans-serif!important; font-weight:600!important; font-size:.75rem!important; padding:9px 16px!important; transition:all .2s!important; }
+            body.body--dark .plug-ctrl-btn { background:rgba(255,255,255,0.07)!important; color:#9ca3af!important; }
+            .plug-ctrl-btn:hover { background:rgba(0,0,0,0.08)!important; color:#111827!important; }
+            body.body--dark .plug-ctrl-btn:hover { background:rgba(255,255,255,0.12)!important; color:#FFFFFF!important; }
+            .plug-led-btn { background:rgba(0,0,0,0.04)!important; border:none!important; border-radius:999px!important; color:#4B5563!important; font-weight:600!important; font-size:.7rem!important; padding:8px 12px!important; transition:all .2s!important; flex:1; min-width:70px; }
+            body.body--dark .plug-led-btn { background:rgba(255,255,255,0.07)!important; color:#9ca3af!important; }
+            .plug-led-btn:hover { background:rgba(0,0,0,0.08)!important; color:#111827!important; }
+            body.body--dark .plug-led-btn:hover { background:rgba(255,255,255,0.12)!important; color:#FFFFFF!important; }
+            .dot-ok  { width:9px;height:9px;border-radius:50%;background:#22c55e;display:inline-block;box-shadow:0 0 7px rgba(34,197,94,0.7); }
+            .dot-err { width:9px;height:9px;border-radius:50%;background:#ef4444;display:inline-block; }
+            .plug-warn-banner { background:#FEF2F2; border-radius:14px; padding:12px 16px; margin-top:10px; font-family:'Inter',sans-serif; font-size:.75rem; color:#991B1B; font-weight:500; display:none; }
+            body.body--dark .plug-warn-banner { background:rgba(239,68,68,0.1); color:#fca5a5; border:1px solid rgba(239,68,68,0.2); }
             .plug-warn-banner.visible { display:block; }
-
-            .plug-section-title { font-family:'Inter',sans-serif; font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:#6B7280; margin-bottom:10px; font-weight: 700; }
-            body.body--dark .plug-section-title { color:#A1A1AA; }
-            
-            .plug-inner-card { background:#F9FAFB; border-radius:20px; padding:16px 18px; margin-top:12px; }
-            body.body--dark .plug-inner-card { background:#222222; }
+            .plug-section-title { font-family:'Inter',sans-serif; font-size:.68rem; letter-spacing:.1em; text-transform:uppercase; color:#9ca3af; margin-bottom:10px; font-weight: 700; }
+            .plug-inner-card { background:rgba(0,0,0,0.03); border-radius:16px; padding:16px 18px; margin-top:12px; }
+            body.body--dark .plug-inner-card { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); }
 
             /* Select & Dropdown styling */
             .q-field--outlined .q-field__control { border-radius: 999px !important; }
@@ -792,7 +776,7 @@ def render_server_content():
                                         'text-lg font-bold text-slate-800 dark:text-white')
 
                 # Quick plug status summary cards
-                for dev_key in ("plug", "server"):
+                for dev_key in ("plug", "server", "extension"):
                     with plug_lock:
                         s  = plug_state[dev_key]["status"]
                         ok = plug_state[dev_key]["ok"]
@@ -831,8 +815,7 @@ def render_server_content():
         ui.timer(6.0, update_iot_display)
 
         with ui.card().classes(
-            'glass-card w-full p-4 sm:p-6 mt-2 sm:mt-4 bg-slate-200/50 dark:bg-slate-800/50 '
-            'border-l-4 border-slate-300 dark:border-white'):
+            'glass-card w-full p-4 sm:p-6 mt-2 sm:mt-4'):
             with ui.row().classes('items-start gap-4'):
                 with ui.column().classes('w-full'):
                     with ui.row().classes('items-center justify-between w-full mb-1'):
