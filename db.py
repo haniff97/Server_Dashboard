@@ -157,7 +157,7 @@ def aggregate_monthly(device_id: str, year_month: str = None) -> None:
             SELECT
                 device_id,
                 device_name,
-                SUM(total_kwh) AS total_kwh
+                SUM(total_wh) / 1000.0 AS total_kwh
             FROM plug_daily_summary
             WHERE DATE_FORMAT(date, '%%Y-%%m') = %s AND device_id = %s
             GROUP BY device_id, device_name

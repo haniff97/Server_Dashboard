@@ -3,7 +3,7 @@ tuya_plug.py  (rewritten)
 =========================
 NiceGUI dashboard for two smart plugs via tinytuya local LAN.
 - Smart Plug  (192.168.1.2)  : full control
-- Server Plug (192.168.1.15) : full control + double-confirm OFF
+- Server Plug (192.168.1.3) : full control + double-confirm OFF
 
 Storage : MariaDB (homelab db)
 Metrics : Prometheus on port 2000

@@ -4,6 +4,13 @@ A real-time monitoring and control system for a self-hosted home server. It prov
 
 ---
 
+## 🆕 Recent Updates (Sep 2026)
+- **UI Modernization**: Upgraded the Server Monitor IoT cards to a cleaner, glass-morphism style layout (removed old green-border indicators).
+- **Responsive Energy Charts**: Fixed mobile layout constraints for the live Echart energy graph, ensuring it properly scales on all devices.
+- **Hardware Integrations**: Added support for the `Extension LR` smart plug into the main dashboard and cloud syncing.
+
+---
+
 ## 🌟 Features
 
 The dashboard is built as a sleek Single Page Application (SPA) with three main tabs:
