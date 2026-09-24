@@ -1306,127 +1306,30 @@ def _build_plug_panel(dev_key: str) -> dict:
 #  TAB 3 — PLUGS
 # ─────────────────────────────────────────────────────────────────────────────
 def render_plugs_content():
+
+    async def _exec_cmd(dk, fn, label):
+        ok_cmd = await run.io_bound(fn)
+        ui.notify(f"✅ {label}" if ok_cmd else f"⚠ {label} failed",
+                  type="positive" if ok_cmd else "warning")
+    cards_data = {}
+    active_zone = {'val': 'All'}
+    active_status = {'val': 'All'}
+    search_query = {'val': ''}
+    pending_off_dev = {'key': None}
+    detail_modal_dev = {'key': 'server'}
+
     with ui.column().classes('w-full gap-4 sm:gap-6'):
 
+        # ── Safety Confirmation Modal for Critical Devices ───────────────────
+        with ui.dialog() as confirm_dialog, ui.card().classes('glass-card p-6 max-w-md w-full border-2 border-rose-500/40'):
+            with ui.row().classes('items-center gap-3 text-rose-500 mb-2'):
+                ui.icon('warning', size='md')
+                ui.label('Critical Infrastructure Protection').classes('text-lg font-bold text-slate-800 dark:text-white')
+            confirm_desc = ui.label('').classes('text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-4')
+            with ui.row().classes('w-full justify-end gap-2'):
+                ui.button('Cancel (Keep Running)', on_click=confirm_dialog.close).props('outline rounded text-color=grey')
+                
 
-        with ui.row().classes('items-center gap-2 mb-2'):
-            ui.icon('electrical_services', color='positive')
-            ui.label('Device Control').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
-
-        with ui.grid().classes('w-full gap-6 grid-cols-1 lg:grid-cols-2'):
-            plug_refs   = _build_plug_panel("plug")
-            server_refs = _build_plug_panel("server")
-
-    # ── Live update timer ────────────────────────────────────────────────
-    def _update_panel(refs: dict):
-        dk = refs["dev_key"]
-        with plug_lock:
-            s  = plug_state[dk]["status"]
-            ok = plug_state[dk]["ok"]
-
-        refs["conn_dot"].classes(remove="dot-ok dot-err").classes("dot-ok" if ok else "dot-err")
-
-        if not s:
-            return
-
-        on = s["switch"]
-
-        # Toggle button (skip if warn-pending)
-        if not refs.get("server_off_confirm", {}).get("pending"):
-            refs["toggle_btn"].classes(
-                remove="plug-toggle-on plug-toggle-off plug-toggle-warn"
-            ).classes("plug-toggle-on" if on else "plug-toggle-off")
-            refs["toggle_btn"].set_text("● ON" if on else "○ OFF")
-
-        # Card on/off glow
-        if on:
-            refs["card_el"].classes(add="plug-on")
-        else:
-            refs["card_el"].classes(remove="plug-on")
-
-        # Live readings
-        refs["ref_watts"].set_text(f"{s['watts']:.1f}")
-        refs["ref_voltage"].set_text(f"{s['voltage']:.1f}")
-        refs["ref_current"].set_text(f"{s['current_ma']}")
-        refs["ref_total_kwh"].set_text(f"{s['add_ele_kwh']:.3f}")
-
-        # Today's energy from cache — zero blocking
-        with energy_cache_lock:
-            today = energy_cache[dk].copy()
-        refs["ref_today_kwh"].set_text(f"{today['total_kwh']:.4f}")
-        refs["ref_today_rm"].set_text(f"RM {today['cost_rm']:.4f}")
-
-        # Chart
-        new_opts = _plug_chart_options(dk)
-        refs["chart"].options.update(new_opts)
-        refs["chart"].update()
-
-    def _refresh_plugs():
-        _update_panel(plug_refs)
-        _update_panel(server_refs)
-
-    ui.timer(4.0, _refresh_plugs)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  MAIN SPA PAGE  /
-# ─────────────────────────────────────────────────────────────────────────────
-@ui.page('/')
-def index_page():
-    dark_mode = ui.dark_mode()
-    dark_mode.enable()
-    add_common_styles()
-    ui.colors(primary='#3b82f6', secondary='#8b5cf6', accent='#ec4899',
-              positive='#10b981', warning='#f59e0b')
-    
-    with ui.header().classes('glass-header items-center justify-between p-3 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
-        with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto sm:flex-1 justify-center sm:justify-start relative'):
-            ui.icon('dns', size='md', color='primary').classes('drop-shadow-md')
-            ui.label('HOMELAB').classes('text-2xl font-bold tracking-tight text-slate-900 dark:text-white')
-            # Mobile-only dark mode button placed on the right edge
-            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('lt-sm absolute right-2 text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
-        
-        with ui.row().classes('items-center justify-center z-10 w-full sm:w-auto sm:flex-1 mt-3 sm:mt-0'):
-            toggle = ui.toggle(
-                ['Server', 'Energy', 'Plugs', 'Network'], value='Server'
-            ).props('unelevated rounded').classes('q-btn-group').style('border-radius: 20px; font-weight: 600;')
-
-        with ui.row().classes('items-center justify-end gap-4 z-10 gt-xs sm:flex-1'):
-            with ui.row().classes('items-center gap-2 bg-slate-200 dark:bg-slate-800 rounded-full px-3 py-1 gt-sm'):
-                ui.icon('schedule', size='xs', color='gray-400')
-                ui.label().bind_text_from(globals(), 'last_update').classes('text-sm text-slate-600 dark:text-gray-300 font-mono')
-            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
-
-    with ui.column().classes('w-full max-w-7xl mx-auto px-4 sm:px-6 pt-0 pb-4 sm:pb-6 mt-0 gap-4 sm:gap-8'):
-        async def on_tab_change(e):
-            if e.value == 'Network':
-                with network_lock:
-                    summary_lines = []
-                    for t, td in network_state["targets"].items():
-                        summary_lines.append(
-                            f"{t}: latency={td['latency']:.1f}ms, "
-                            f"jitter={td['jitter']:.1f}ms, "
-                            f"packet_loss={td['packet_loss']:.1f}%"
-                        )
-                    summary = "\n".join(summary_lines)
-                ai_text = await run.io_bound(_call_gemini_network, summary)
-                with network_lock:
-                    network_state["ai_insights"] = ai_text
-
-        toggle.on_value_change(on_tab_change)
-        with ui.tab_panels(toggle, value='Server').classes('w-full bg-transparent p-0'):
-            with ui.tab_panel('Server').classes('p-0'):
-                render_server_content()
-            with ui.tab_panel('Energy').classes('p-0'):
-                render_energy_content()
-            with ui.tab_panel('Plugs').classes('p-0'):
-                render_plugs_content()
-            with ui.tab_panel('Network').classes('p-0'):
-                render_network_content()
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  RENDER NETWORK CONTENT
-# ─────────────────────────────────────────────────────────────────────────────
 def render_network_content():
     with ui.column().classes('w-full gap-4 sm:gap-6'):
         with ui.row().classes('items-center gap-2 mb-2 w-full'):
