@@ -184,3 +184,26 @@ async def update_network_state():
             print(f"❌ Network monitor error: {e}")
 
         await asyncio.sleep(state.NETWORK_PROBE_INTERVAL)
+
+
+# ── On-demand AI trigger (called by view on tab switch) ───────────────────────
+async def trigger_network_ai() -> None:
+    """
+    Build a network summary from current state, call the AI, and write the
+    result back into state.network_state["ai_insights"].
+    Views should call this instead of calling call_gemini_network() directly.
+    """
+    with state.network_lock:
+        summary_lines = []
+        for t, td in state.network_state["targets"].items():
+            summary_lines.append(
+                f"{t}: latency={td['latency']:.1f}ms, "
+                f"jitter={td['jitter']:.1f}ms, "
+                f"packet_loss={td['packet_loss']:.1f}%"
+            )
+        summary = "\n".join(summary_lines)
+
+    ai_text = await run.io_bound(call_gemini_network, summary)
+
+    with state.network_lock:
+        state.network_state["ai_insights"] = ai_text

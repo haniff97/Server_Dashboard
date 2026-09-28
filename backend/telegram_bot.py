@@ -3,7 +3,7 @@ import os
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from gemini_ai import analyze_system, get_live_data
+from ai_agent import analyze_system, get_live_data
 from dotenv import load_dotenv
 
 

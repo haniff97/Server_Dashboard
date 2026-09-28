@@ -1,5 +1,5 @@
 """
-gemini_ai.py — now powered by DeepSeek (OpenAI-compatible API).
+ai_agent.py — powered by DeepSeek (OpenAI-compatible API).
 Button-triggered only — no auto-timer, no wasted tokens.
 Called from homelab-bot when user requests a summary or an anomaly is detected.
 """

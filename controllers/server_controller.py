@@ -11,8 +11,10 @@ import json
 from datetime import datetime
 
 from nicegui import run
-from prometheus_api_client import PrometheusConnect
-import paho.mqtt.client as mqtt_client
+try:
+    import paho.mqtt.client as mqtt_client
+except ImportError:
+    mqtt_client = None
 
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
@@ -20,7 +22,11 @@ if _project_root not in sys.path:
 
 import models.state as state
 
-prom = PrometheusConnect(url="http://localhost:9090", disable_ssl=True)
+try:
+    from prometheus_api_client import PrometheusConnect
+    prom = PrometheusConnect(url="http://localhost:9090", disable_ssl=True)
+except Exception:
+    prom = None
 
 
 # ── Hardware helpers ──────────────────────────────────────────────────────────
@@ -64,6 +70,9 @@ def _fetch_all_metrics() -> dict:
     """Pure sync — offloaded to thread pool via run.io_bound()."""
     stats: dict = {}
     iot: dict = {}
+
+    if not prom:
+        return {'system': stats, 'iot': iot}
 
     cpu_q = prom.custom_query(
         query='100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)')
@@ -142,7 +151,7 @@ def run_deepseek_analysis() -> str:
     import sys
     sys.path.insert(0, "/mnt/nvme/Projects/dashboard")
     try:
-        from backend.gemini_ai import analyze_system
+        from backend.ai_agent import analyze_system
         return analyze_system(triggered_by="manual")
     except Exception as e:
         return f"❌ Analysis error: {e}"

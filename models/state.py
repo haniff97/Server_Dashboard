@@ -23,13 +23,19 @@ NETWORK_TRACEROUTE_HOPS       = 20
 NETWORK_AI_INTERVAL           = 300
 NETWORK_PACKET_LOSS_THRESHOLD = 1.0   # %
 NETWORK_LATENCY_THRESHOLD_MS  = 150   # ms
-NETWORK_AI_CACHE_PATH  = "/mnt/nvme/Projects/dashboard/gemini_network_cache.txt"
+NETWORK_AI_CACHE_PATH  = os.getenv(
+    "NETWORK_AI_CACHE_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "gemini_network_cache.txt"),
+)
 NETWORK_TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 NETWORK_TELEGRAM_CHAT  = os.getenv("TELEGRAM_CHAT_ID", "")
 GEMINI_API_KEY         = os.getenv("GEMINI_API_KEY", "")
 
-PLUG_POLL_INTERVAL = 10  # seconds
-AI_CACHE_PATH = "/mnt/nvme/Projects/dashboard/gemini_cache.txt"
+PLUG_POLL_INTERVAL = int(os.getenv("PLUG_POLL_INTERVAL", 10))  # seconds
+AI_CACHE_PATH = os.getenv(
+    "AI_CACHE_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "gemini_cache.txt"),
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  SYSTEM STATE
