@@ -283,31 +283,29 @@ def render_plugs_content():
                 is_on = s["switch"] if s else False
 
                 with ui.element('div').classes('w-full') as card_wrapper:
-                    card_cls = f"plug-card-modern p-4 sm:p-5 flex flex-col justify-between h-full {'plug-active' if is_on else ''} {'plug-critical' if is_crit else ''}"
+                    card_cls = f"plug-card-modern p-4 flex flex-col gap-3 {'plug-active' if is_on else ''} {'plug-critical' if is_crit else ''}"
                     with ui.card().classes(card_cls) as card_el:
 
                         # Header: Icon + Name + Zone + Critical Badge + Pulse Dot
-                        with ui.row().classes('items-center justify-between w-full mb-3'):
-                            with ui.row().classes('items-center gap-2.5 overflow-hidden'):
-                                with ui.element('div').classes('p-2 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center'):
+                        with ui.row().classes('items-center justify-between w-full'):
+                            with ui.row().classes('items-center gap-3 overflow-hidden'):
+                                with ui.element('div').classes('p-2 rounded-lg bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center'):
                                     icon_el = ui.icon(cfg.get('icon', 'power'), size='sm').classes('text-primary')
                                 with ui.column().classes('gap-0 overflow-hidden'):
                                     ui.label(cfg["name"]).classes('text-sm font-bold text-slate-800 dark:text-white truncate')
                                     with ui.row().classes('items-center gap-1.5'):
                                         ui.label(cfg.get('zone', 'Homelab')).classes('text-[10px] text-slate-400 font-medium')
-                                        ui.label(f"• {cfg.get('ip', '—')}").classes('text-[10px] text-slate-400 font-mono')
+                                        if is_crit:
+                                            ui.badge('🔒 Protected', color='negative').props('dense rounded').classes('text-[9px] font-bold ml-1')
 
                             with ui.row().classes('items-center gap-2 flex-shrink-0'):
-                                if is_crit:
-                                    ui.badge('🔒 Protected', color='negative').props('dense rounded').classes('text-[9px] font-bold')
                                 dot_el = ui.element('span').classes('pulse-dot-online' if ok else 'pulse-dot-offline')
 
-                        # Center: Big Wattage + Switch Button
-                        with ui.row().classes('items-center justify-between w-full my-2'):
-                            with ui.column().classes('gap-0'):
-                                with ui.row().classes('items-baseline gap-1'):
-                                    watts_val_label = ui.label('0.0').classes('text-2xl font-black text-slate-800 dark:text-white font-mono')
-                                    ui.label('W').classes('text-xs font-bold text-slate-400')
+                        # Body: Wattage and Switch
+                        with ui.row().classes('items-center justify-between w-full mt-1 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800/50'):
+                            with ui.row().classes('items-baseline gap-1'):
+                                watts_val_label = ui.label('0.0').classes('text-2xl font-black text-slate-800 dark:text-white font-mono tracking-tight')
+                                ui.label('W').classes('text-xs font-bold text-slate-400')
 
                             # Power Switch Button
                             def make_toggle(dk=dev_key, crit=is_crit):
@@ -342,26 +340,22 @@ def render_plugs_content():
                                 on_click=make_toggle(dev_key, is_crit)
                             ).classes(f"plug-switch-btn {'plug-switch-on' if is_on else 'plug-switch-off'}")
 
-                        ui.separator().classes('my-2 bg-slate-200/40 dark:bg-slate-800/40')
+                        # Footer: Metrics Strip & Details Button
+                        with ui.row().classes('w-full items-center justify-between mt-1 gap-2 flex-wrap'):
+                            with ui.row().classes('items-center gap-3'):
+                                with ui.row().classes('items-center gap-1'):
+                                    v_label = ui.label('—').classes('text-[11px] font-bold font-mono text-slate-600 dark:text-slate-300')
+                                    ui.label('V').classes('text-[9px] text-slate-400 font-bold')
+                                with ui.row().classes('items-center gap-1'):
+                                    ma_label = ui.label('—').classes('text-[11px] font-bold font-mono text-slate-600 dark:text-slate-300')
+                                    ui.label('mA').classes('text-[9px] text-slate-400 font-bold')
+                                with ui.row().classes('items-center gap-1'):
+                                    kwh_label = ui.label('0.00').classes('text-[11px] font-bold font-mono text-emerald-600 dark:text-emerald-400')
+                                    ui.label('kWh').classes('text-[9px] text-slate-400 font-bold')
+                                with ui.row().classes('items-center gap-1'):
+                                    rm_label = ui.label('RM 0.00').classes('text-[11px] font-bold font-mono text-blue-600 dark:text-blue-400')
 
-                        # Metrics Strip: Volts, Amps, Today kWh, Today RM
-                        with ui.grid().classes('w-full grid-cols-4 gap-1 text-center my-1'):
-                            with ui.column().classes('gap-0 items-center'):
-                                v_label = ui.label('—').classes('text-xs font-bold font-mono text-slate-700 dark:text-slate-200')
-                                ui.label('VOLTS').classes('text-[9px] text-slate-400 font-bold')
-                            with ui.column().classes('gap-0 items-center'):
-                                ma_label = ui.label('—').classes('text-xs font-bold font-mono text-slate-700 dark:text-slate-200')
-                                ui.label('AMPS').classes('text-[9px] text-slate-400 font-bold')
-                            with ui.column().classes('gap-0 items-center'):
-                                kwh_label = ui.label('0.00').classes('text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400')
-                                ui.label('TODAY').classes('text-[9px] text-slate-400 font-bold')
-                            with ui.column().classes('gap-0 items-center'):
-                                rm_label = ui.label('RM 0.00').classes('text-xs font-bold font-mono text-blue-600 dark:text-blue-400')
-                                ui.label('COST').classes('text-[9px] text-slate-400 font-bold')
-
-                        # Sparkline / Details modal trigger
-                        with ui.row().classes('w-full justify-end items-center mt-2'):
-                            ui.button('Details & Timers →', on_click=lambda dk=dev_key: open_detail_modal(dk)).props('flat rounded dense').classes('text-[10px] font-bold text-slate-400 hover:text-primary px-2')
+                            ui.button('Details →', on_click=lambda dk=dev_key: open_detail_modal(dk)).props('flat rounded dense').classes('text-[10px] font-bold text-primary hover:bg-primary/10 px-2 py-1 ml-auto')
 
                     cards_data[dev_key] = {
                         'wrapper': card_wrapper,
