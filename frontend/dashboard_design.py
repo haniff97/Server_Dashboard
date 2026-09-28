@@ -767,26 +767,26 @@ def render_server_content(on_nav_to_plugs=None):
                         total_w += watts
 
                     is_crit = cfg.get("is_critical", False)
-                    tile_cls = f"iot-plug-tile {'tile-on' if is_on else ''} {'tile-critical' if is_crit else ''}"
+                    tile_cls = f"iot-plug-tile {'tile-on' if is_on else ''} {'tile-critical' if is_crit else ''} aspect-square flex flex-col justify-between p-4"
                     with ui.card().classes(tile_cls):
-                        with ui.row().classes('items-center justify-between w-full mb-1'):
-                            with ui.row().classes('items-center gap-2 overflow-hidden'):
-                                ui.icon(cfg.get('icon', 'power'), size='xs').classes(
+                        with ui.row().classes('items-start justify-between w-full'):
+                            with ui.column().classes('gap-1'):
+                                ui.icon(cfg.get('icon', 'power'), size='sm').classes(
                                     'text-emerald-500' if is_on else 'text-slate-400'
                                 )
-                                with ui.column().classes('gap-0 overflow-hidden'):
+                                with ui.column().classes('gap-0 mt-1'):
                                     ui.label(cfg["name"]).classes(
-                                        'text-xs font-bold text-slate-800 dark:text-slate-200 truncate'
+                                        'text-sm font-bold text-slate-800 dark:text-slate-200 leading-tight'
                                     )
                                     ui.label(cfg.get("zone", "Lab")).classes(
-                                        'text-[9px] text-slate-400'
+                                        'text-[10px] text-slate-400'
                                     )
                             if is_crit:
-                                ui.icon('lock', size='12px').classes('text-rose-500').tooltip('Protected Infrastructure')
+                                ui.icon('lock', size='14px').classes('text-rose-500').tooltip('Protected Infrastructure')
 
-                        with ui.row().classes('items-center justify-between w-full mt-2'):
+                        with ui.row().classes('items-end justify-between w-full mt-auto'):
                             ui.label(f"{watts:.1f} W" if is_on else "OFF").classes(
-                                f"text-xs font-mono font-bold {'text-emerald-500 dark:text-emerald-400' if is_on else 'text-slate-400'}"
+                                f"text-xs font-bold uppercase tracking-wider {'text-emerald-500 dark:text-emerald-400' if is_on else 'text-slate-400'}"
                             )
 
                             def make_toggle_handler(dk=dev_key, crit=is_crit):
@@ -807,8 +807,8 @@ def render_server_content(on_nav_to_plugs=None):
                             ui.button(
                                 'ON' if is_on else 'OFF',
                                 on_click=make_toggle_handler(dev_key, is_crit)
-                            ).props('dense unelevated rounded').classes(
-                                f"text-[10px] font-bold px-2 py-0.5 {'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' if is_on else 'bg-slate-200 dark:bg-slate-800 text-slate-500'}"
+                            ).props('unelevated rounded').classes(
+                                f"text-[11px] font-bold px-3 py-1 transition-colors {'bg-emerald-500 text-white hover:bg-emerald-600' if is_on else 'bg-blue-500 text-white hover:bg-blue-600'}"
                             )
 
             server_fleet_watts_label.set_text(f"⚡ {total_w:.1f} W load")
@@ -1225,7 +1225,6 @@ def render_plugs_content():
                     with ui.row().classes('items-baseline gap-1 mt-1'):
                         fleet_active_label = ui.label('0 / 8').classes('text-2xl sm:text-3xl font-black text-emerald-500')
                         ui.label('ONLINE').classes('text-[10px] font-bold text-slate-400')
-                    fleet_active_bar = ui.linear_progress(value=0.75).props('color=positive track-color=grey-8 rounded').classes('h-1.5 mt-1')
 
                 # 3. Today's Energy & Cost
                 with ui.column().classes('p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/60'):
@@ -1486,7 +1485,6 @@ def render_plugs_content():
         fleet_watts_label.set_text(f"{total_w:.1f}")
         fleet_kw_label.set_text(f"{total_w/1000.0:.3f} kW combined")
         fleet_active_label.set_text(f"{active_cnt} / {len(MOCK_DEVICES)}")
-        fleet_active_bar.set_value(active_cnt / max(1, len(MOCK_DEVICES)))
         fleet_today_kwh_label.set_text(f"{total_today_kwh:.2f} kWh")
         fleet_today_cost_label.set_text(f"RM {total_today_cost:.2f}")
         top_device_name_label.set_text(top_consumer[0])

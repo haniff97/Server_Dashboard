@@ -220,7 +220,6 @@ def render_plugs_content():
                     with ui.row().classes('items-baseline gap-1 mt-1'):
                         fleet_active_label = ui.label(f'0 / {len(tuya_local.DEVICES)}').classes('text-2xl sm:text-3xl font-black text-emerald-500')
                         ui.label('ONLINE').classes('text-[10px] font-bold text-slate-400')
-                    fleet_active_bar = ui.linear_progress(value=0.0).props('color=positive track-color=grey-8 rounded').classes('h-1.5 mt-1')
 
                 # 3. Today's Energy & Cost
                 with ui.column().classes('p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/60'):
@@ -458,7 +457,6 @@ def render_plugs_content():
         fleet_watts_label.set_text(f"{total_w:.1f}")
         fleet_kw_label.set_text(f"{total_w/1000.0:.3f} kW combined")
         fleet_active_label.set_text(f"{active_cnt} / {len(tuya_local.DEVICES)}")
-        fleet_active_bar.set_value(active_cnt / max(len(tuya_local.DEVICES), 1))
         fleet_today_kwh_label.set_text(f"{total_kwh_sum:.2f} kWh")
         fleet_today_cost_label.set_text(f"RM {total_cost_sum:.2f}")
         top_device_name_label.set_text(top_dev_name)

@@ -3,7 +3,7 @@ import os
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from ai_agent import analyze_system, get_live_data
+from ai_agent import analyze_system, analyze_plugs, get_live_data
 from dotenv import load_dotenv
 
 
@@ -24,7 +24,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    await update.message.reply_text("🤖 Consulting Gemini...")
+    await update.message.reply_text("Reasoning 🤖...")
 
     await update.message.reply_text(analyze_system())
 
@@ -46,6 +46,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
+async def plug(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    await update.message.reply_text("Checking plugs 🔌...")
+
+    await update.message.reply_text(analyze_plugs())
+
+
+
 async def reboot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("🔄 Rebooting Orange Pi...")
@@ -63,6 +71,8 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("status", status))
 
     app.add_handler(CommandHandler("stats", stats))
+
+    app.add_handler(CommandHandler("plug", plug))
 
     app.add_handler(CommandHandler("reboot", reboot))
 

@@ -4,9 +4,15 @@ Button-triggered only — no auto-timer, no wasted tokens.
 Called from homelab-bot when user requests a summary or an anomaly is detected.
 """
 import os
+import sys
 import json
 import requests
 import subprocess
+
+# Ensure project root is importable (services/ lives there)
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from dotenv import load_dotenv
 
@@ -97,6 +103,86 @@ LINE 4: 💡 INSIGHT: [1 short actionable SRE tip]
             f.write(f"[{triggered_by.upper()}]\n{analysis}")
 
         return analysis
+    except Exception as e:
+        return f"❌ DeepSeek error: {str(e)[:60]}"
+
+
+# ── Plug data (reads today's DB summary — works across processes) ─────────────
+def get_plug_data() -> list:
+    """
+    Returns a list of dicts with today's energy summary per plug.
+    Reads directly from MariaDB so it works in the standalone bot process.
+    """
+    try:
+        import services.db as db
+        import services.tuya_local as tuya_local
+        plugs = []
+        for dev_key, cfg in tuya_local.DEVICES.items():
+            summary = db.get_today_summary(cfg["id"])
+            plugs.append({
+                "key":        dev_key,
+                "name":       cfg["name"],
+                "zone":       cfg.get("zone", ""),
+                "avg_watts":  float(summary.get("avg_watts") or 0),
+                "peak_watts": float(summary.get("peak_watts") or 0),
+                "total_kwh":  float(summary.get("total_kwh") or 0),
+            })
+        return plugs
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
+def analyze_plugs() -> str:
+    """
+    AI insight for each smart plug based on today's energy data.
+    Returns one block per plug: status line + actionable insight line.
+    """
+    if not API_KEY:
+        return "⚠️ DEEPSEEK_API_KEY not set."
+
+    plugs = get_plug_data()
+    if not plugs or "error" in plugs[0]:
+        err = plugs[0].get("error", "unknown") if plugs else "no data"
+        return f"⚠️ Could not read plug data: {err}"
+
+    data_lines = []
+    for p in plugs:
+        state = "ON" if p["avg_watts"] > 0.5 else "OFF"
+        data_lines.append(
+            f"{p['name']} ({p['zone']}): {state}, avg={p['avg_watts']}W, "
+            f"peak={p['peak_watts']}W, today={p['total_kwh']:.4f}kWh"
+        )
+    data_block = "\n".join(data_lines)
+
+    prompt = f"""You are a smart home energy SRE agent. Analyze today's smart plug data below.
+
+For EACH plug write exactly 2 lines — no intro, no outro:
+LINE 1: [🟢 if ON / 🔴 if OFF] [Plug Name] is [on/off] ([avg watts]W)
+LINE 2: [One concise SRE action tip or status observation]
+
+DATA:
+{data_block}
+
+Rules:
+- 🟢 if avg_watts > 0.5, otherwise 🔴
+- Keep each tip under 12 words
+- No markdown, no bullet points
+"""
+
+    try:
+        resp = requests.post(
+            DEEPSEEK_URL,
+            headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
+            json={
+                "model": MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 200,
+                "temperature": 0.3,
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
         return f"❌ DeepSeek error: {str(e)[:60]}"
 

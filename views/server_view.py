@@ -143,24 +143,24 @@ def render_server_content(on_nav_to_plugs=None):
                         total_w += watts
 
                     is_crit = cfg.get("is_critical", False) or cfg.get("is_server", False)
-                    tile_cls = f"iot-plug-tile {'tile-on' if is_on else ''} {'tile-critical' if is_crit else ''}"
+                    tile_cls = f"iot-plug-tile {'tile-on' if is_on else ''} {'tile-critical' if is_crit else ''} aspect-square flex flex-col justify-between p-4"
                     with ui.card().classes(tile_cls):
-                        with ui.row().classes('items-center justify-between w-full mb-1'):
-                            with ui.row().classes('items-center gap-2 overflow-hidden'):
-                                ui.icon(cfg.get('icon', 'power'), size='xs').classes(
+                        with ui.row().classes('items-start justify-between w-full'):
+                            with ui.column().classes('gap-1'):
+                                ui.icon(cfg.get('icon', 'power'), size='sm').classes(
                                     'text-emerald-500' if is_on else 'text-slate-400'
                                 )
-                                with ui.column().classes('gap-0 overflow-hidden'):
+                                with ui.column().classes('gap-0 mt-1'):
                                     ui.label(cfg["name"]).classes(
-                                        'text-xs font-bold text-slate-800 dark:text-slate-200 truncate'
+                                        'text-sm font-bold text-slate-800 dark:text-slate-200 leading-tight'
                                     )
-                                    ui.label(cfg.get("zone", "Homelab")).classes('text-[9px] text-slate-400')
+                                    ui.label(cfg.get("zone", "Homelab")).classes('text-[10px] text-slate-400')
                             if is_crit:
-                                ui.icon('lock', size='12px').classes('text-rose-500').tooltip('Protected Infrastructure')
+                                ui.icon('lock', size='14px').classes('text-rose-500').tooltip('Protected Infrastructure')
 
-                        with ui.row().classes('items-center justify-between w-full mt-2'):
+                        with ui.row().classes('items-end justify-between w-full mt-auto'):
                             ui.label(f"{watts:.1f} W" if is_on else "OFF").classes(
-                                f"text-xs font-mono font-bold {'text-emerald-500 dark:text-emerald-400' if is_on else 'text-slate-400'}"
+                                f"text-xs font-bold uppercase tracking-wider {'text-emerald-500 dark:text-emerald-400' if is_on else 'text-slate-400'}"
                             )
 
                             def make_toggle_handler(dk=dev_key, crit=is_crit):
@@ -193,8 +193,8 @@ def render_server_content(on_nav_to_plugs=None):
                             ui.button(
                                 'ON' if is_on else 'OFF',
                                 on_click=make_toggle_handler(dev_key, is_crit)
-                            ).props('dense unelevated rounded').classes(
-                                f"text-[10px] font-bold px-2 py-0.5 {'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' if is_on else 'bg-slate-200 dark:bg-slate-800 text-slate-500'}"
+                            ).props('unelevated rounded').classes(
+                                f"text-[11px] font-bold px-3 py-1 transition-colors {'bg-emerald-500 text-white hover:bg-emerald-600' if is_on else 'bg-blue-500 text-white hover:bg-blue-600'}"
                             )
 
             server_fleet_watts_label.set_text(f"⚡ {total_w:.1f} W load")
