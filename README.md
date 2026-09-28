@@ -1,100 +1,150 @@
-# Homelab Server Dashboard
+# 🖥️ Homelab Server Dashboard
 
-A real-time monitoring and control system for a self-hosted home server. It provides a live, unified view of hardware health, IoT sensor data, smart plug power consumption, and AI-generated system insights—all bundled in a responsive, modern web UI.
-
----
-
-## 🆕 Recent Updates (Sep 2026)
-- **UI Modernization**: Upgraded the Server Monitor IoT cards to a cleaner, glass-morphism style layout (removed old green-border indicators).
-- **Responsive Energy Charts**: Fixed mobile layout constraints for the live Echart energy graph, ensuring it properly scales on all devices.
-- **Hardware Integrations**: Added support for the `Extension LR` smart plug into the main dashboard and cloud syncing.
+A real-time monitoring and control system for a self-hosted home server. Built with a clean **MVC architecture** in Python, it provides a unified live view of hardware health, IoT sensor data, smart plug power consumption, network diagnostics, and AI-generated SRE insights — all in a responsive, glassmorphism web UI.
 
 ---
 
-## 🌟 Features
+## ✨ Features
 
-The dashboard is built as a sleek Single Page Application (SPA) with three main tabs:
+### 🖥️ Server Monitor
+- Live **CPU, Memory, NVMe & HDD** metrics via Prometheus
+- **CPU & NVMe temperatures** via `/sys/class/thermal/` and `smartctl`
+- **IoT Environmental Sensors** — ESP32 temperature & humidity over MQTT
+- **AI SRE Analysis** — DeepSeek-powered health summary, cached and refreshed every 30 minutes
 
-### 1. 🖥️ Server Monitor
-Displays live system performance pulled from **Prometheus**:
-- **CPU & Core Temp** (via `node_cpu_seconds_total` and `/sys/class/thermal/`)
-- **Memory Usage** (used / total GB with a dynamic progress bar)
-- **Storage Health** (NVMe SSD & HDD usage and temps)
-- **IoT Environmental Sensors** (temperature & humidity from local ESP32 devices via MQTT)
-- **DeepMind AI Analysis:** An automated SRE-style health summary powered by Google's `gemini-2.5-flash` API, cached locally and updated every 30 minutes.
+### ⚡ Energy Monitor
+- Real-time **wattage, voltage, and current** per smart plug
+- **Daily / Weekly / Monthly** energy history charts
+- **Estimated cost** calculated against TNB (Malaysian) tiered electricity tariffs
 
-### 2. ⚡ Energy Monitor
-Tracks real-time and historical power draw from local smart plugs:
-- **Live Power Gauge (Watts)**
-- **Total Energy Today (kWh)**
-- **Estimated Cost** based on TNB (Tenaga Nasional Berhad) Malaysian electricity tariff tiers.
-- Integrated historical charts for Daily, Weekly, and Monthly tracking.
+### 🔌 Smart Plugs (Tuya Local LAN)
+- Direct **LAN polling** via `tinytuya` — no Tuya cloud dependency
+- Toggle power states with a **double-confirm safety prompt** for critical plugs
+- Per-plug **live wattage history chart** and fleet overview
 
-### 3. 🔌 Smart Plugs (Tuya Local LAN)
-Direct local control and monitoring of Tuya smart plugs without relying on the cloud:
-- **LAN Polling:** Uses `tinytuya` to pull sub-second live telemetry (Watts, Volts, Amps).
-- **Control:** Toggle power states directly from the dashboard.
-- **Safety Measures:** Includes a double-confirm prompt before shutting off the critical "Server" plug to prevent accidental outages.
+### 🌐 Network Monitor
+- **Ping probes** to Google DNS, Fast.com, and YouTube — latency, jitter, packet loss
+- **Traceroute** on anomaly detection with route-change alerts
+- **AI Network Diagnosis** — DeepSeek analyses probe data and identifies internal vs external issues
+- **Telegram alerts** on anomaly detection
+
+### ☁️ Cloud Monitor (`/cloud`)
+- Mirrors energy readings stored in **AWS DynamoDB**
+- Per-device today's summary + last 15 readings table
+
+---
+
+## 🏗️ Architecture
+
+The project follows a strict **MVC (Model-View-Controller)** pattern:
+
+```
+Server_Dashboard/
+├── app.py                        ← Entry point — wires MVC layers & starts background tasks
+│
+├── models/
+│   └── state.py                  ← Single source of truth (all shared mutable state + constants)
+│
+├── controllers/
+│   ├── server_controller.py      ← Prometheus metrics, AI insights, MQTT publisher
+│   ├── plug_controller.py        ← Tuya polling loop, energy cache, toggle commands
+│   └── network_controller.py     ← Ping probes, traceroute, AI network diagnosis, Telegram alerts
+│
+├── views/
+│   ├── layout.py                 ← Routes: @ui.page('/') and @ui.page('/cloud')
+│   ├── server_view.py            ← Server tab UI
+│   ├── energy_view.py            ← Energy tab UI
+│   ├── plugs_view.py             ← Plugs tab UI
+│   ├── network_view.py           ← Network tab UI
+│   └── styles.py                 ← Shared CSS (glassmorphism, dark mode tokens)
+│
+├── services/
+│   ├── db.py                     ← MariaDB queries (energy telemetry, state changes)
+│   ├── tuya_local.py             ← tinytuya device config & LAN helpers
+│   ├── aws_iot_publisher.py      ← AWS IoT Core / DynamoDB publisher
+│   └── cloud_db.py               ← DynamoDB read queries for /cloud page
+│
+└── backend/
+    ├── ai_agent.py               ← DeepSeek AI agent: collects live metrics, generates SRE report
+    └── telegram_bot.py           ← Telegram bot: /status and /top commands via ai_agent
+```
+
+### Data Flow
+
+```mermaid
+flowchart LR
+    subgraph Hardware & Cloud
+        Prometheus
+        TuyaLAN["Tuya LAN (tinytuya)"]
+        ESP32["ESP32 (MQTT)"]
+        DeepSeek["DeepSeek AI API"]
+        AWS["AWS IoT / DynamoDB"]
+    end
+
+    subgraph Controllers
+        SC["server_controller"]
+        PC["plug_controller"]
+        NC["network_controller"]
+    end
+
+    subgraph Model
+        STATE["models/state.py"]
+    end
+
+    subgraph Views
+        UI["NiceGUI Views\n(server / energy / plugs / network)"]
+    end
+
+    Prometheus --> SC
+    TuyaLAN --> PC
+    ESP32 --> Prometheus
+    DeepSeek --> SC & NC
+    AWS --> PC
+
+    SC --> STATE
+    PC --> STATE
+    NC --> STATE
+    STATE --> UI
+```
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Frontend / UI:** [NiceGUI](https://nicegui.io/) (Python-based reactive UI)
-- **Metrics Backend:** Prometheus + Node Exporter
-- **IoT Integration:** ESP32 sensors via MQTT → Prometheus
-- **Smart Plug Control:** Tuya Local API (via `tinytuya` over LAN)
-- **Database:** MariaDB (storing historical energy telemetry)
-- **AI Insights:** Google Gemini API (`gemini-2.5-flash`)
-- **Notifications:** Telegram Bot API
-- **Process Manager:** PM2 (Node.js process manager)
-- **Deployment:** Kubernetes Helm Chart (`/helm`)
+| Layer | Technology |
+|---|---|
+| **UI Framework** | [NiceGUI](https://nicegui.io/) (Python reactive UI) |
+| **Metrics** | Prometheus + Node Exporter |
+| **IoT Sensors** | ESP32 → MQTT → Prometheus |
+| **Smart Plugs** | Tuya Local LAN (`tinytuya`) |
+| **Database** | MariaDB (energy telemetry) |
+| **Cloud DB** | AWS DynamoDB |
+| **AI Agent** | DeepSeek API (`deepseek-chat`) |
+| **Notifications** | Telegram Bot API |
+| **Process Manager** | PM2 (`ecosystem.config.js`) |
+| **Deployment** | Kubernetes Helm Chart (`/helm`) |
 
 ---
 
-## 🏗️ Architecture & Data Flow
+## 🚀 Setup & Running
 
-```mermaid
-flowchart TD
-    subgraph Local Environment
-        ESP32[ESP32 Sensors] -- MQTT --> MQTTBroker[MQTT Broker :1883]
-        MQTTBroker -- "mqtt_exporter.py" --> Prometheus[Prometheus :9090]
-        
-        SmartPlugs[Tuya Smart Plugs] -- LAN Polling --> TinyTuya["tinytuya (Local LAN)"]
-        TinyTuya -- "dashboard.py" --> MariaDB[(MariaDB :3306)]
-    end
-
-    subgraph Backend Services
-        Prometheus -- Query --> Dashboard[NiceGUI Dashboard]
-        MariaDB -- Query --> Dashboard
-        
-        AI[gemini_ai.py CRON] -- Read CPU/RAM/Temp --> GeminiAPI((Gemini Cloud API))
-        GeminiAPI -- Generate SRE Report --> Cache[gemini_cache.txt]
-        Cache -- Read --> Dashboard
-    end
-
-    Dashboard -- Web HTTP --> Browser[User Browser]
-```
-
----
-
-## 🚀 How to Run
-
-### 1. Setup Environment Variables
-Create a `.env` file in the project root containing your API credentials. **Never commit this file to version control.**
+### 1. Environment Variables
+Create a `.env` file in the project root. **Do not commit this file.**
 
 ```env
-# Tuya Configuration
-TUYA_CLIENT_ID=your_tuya_client_id
-TUYA_CLIENT_SECRET=your_tuya_client_secret
-TUYA_REGION=sg
-
-# Google Gemini API (AI Insights)
-GEMINI_API_KEY=your_gemini_api_key
+# DeepSeek AI
+DEEPSEEK_API_KEY=your_deepseek_api_key
 
 # Telegram Alerts
-TELEGRAM_TOKEN=your_telegram_bot_token
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_CHAT_ID=your_chat_id
+
+# Optional: override AI cache file locations (defaults to project root)
+AI_CACHE_PATH=/path/to/gemini_cache.txt
+NETWORK_AI_CACHE_PATH=/path/to/gemini_network_cache.txt
+
+# Optional: override plug poll interval in seconds (default: 10)
+PLUG_POLL_INTERVAL=10
 ```
 
 ### 2. Install Dependencies
@@ -104,25 +154,42 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-*(Note: Key libraries include `nicegui`, `tinytuya`, `mysql-connector-python`, `prometheus_client`, and `prometheus-api-client`)*
+Key dependencies: `nicegui`, `tinytuya`, `mysql-connector-python`, `prometheus-api-client`, `python-telegram-bot`, `requests`
 
-### 3. Start Services with PM2
-The project uses `ecosystem.config.js` to manage background Python processes.
-
+### 3. Run with PM2
 ```bash
-# Start the dashboard, mqtt_exporter, and bot
 pm2 start ecosystem.config.js
 
-# Useful PM2 commands
-pm2 logs           # View live logs
-pm2 status         # Check process health
-pm2 restart all    # Restart services
+pm2 logs              # Live logs
+pm2 status            # Process health
+pm2 restart all       # Restart all services
 ```
 
-By default, the main NiceGUI dashboard is served on **port 3000** (or **8080** locally depending on configuration), and local Prometheus exporters run on ports **2001** and **9324**.
+The dashboard runs on **port 3000** by default (override with `PORT=` env var).
+
+### 4. Run Locally (dev)
+```bash
+python3 app.py
+```
 
 ---
 
-## 🎨 UI Development
+## 🤖 AI Agent
 
-The project includes a `frontend/dashboard_design.py` file which serves as a sandbox for UI prototyping. It uses dummy data and timers instead of real backend connections, allowing for fast CSS and Flexbox layout iteration without running the full database/Prometheus stack. Production code runs exclusively in `frontend/dashboard.py`.
+`backend/ai_agent.py` is the core AI agent. It:
+1. Collects live system metrics (CPU %, RAM %, CPU temp, top processes)
+2. Sends a structured prompt to the **DeepSeek API**
+3. Receives a 4-line SRE-style health summary
+4. Caches the result to disk so the dashboard can display it without re-running the LLM
+
+The **Telegram bot** (`backend/telegram_bot.py`) exposes this agent via `/status` and `/top` commands.
+
+---
+
+## 📡 Background Processes (PM2)
+
+| Process | Script | Role |
+|---|---|---|
+| `homelab-dashboard` | `app.py` | Main NiceGUI web server |
+| `mqtt-exporter` | `mqtt/mqtt_exporter.py` | Bridges ESP32 MQTT → Prometheus |
+| `homelab-bot` | `backend/telegram_bot.py` | Telegram bot for remote queries |
