@@ -22,26 +22,26 @@ def render_server_content(on_nav_to_plugs=None):
 
         # ── 1. System Resource Grid ────────────────────────────────────────────
         with ui.grid().classes('glass-card resource-grid w-full'):
-            for key, name, icon in [
-                ('cpu',    'Processor',    'memory'),
-                ('memory', 'Memory',       'developer_board'),
-                ('nvme',   'NVMe storage', 'storage'),
-                ('hdd',    'Mass storage', 'dns'),
+            for key, name, icon, color in [
+                ('cpu',    'Processor',    'memory',          'primary'),
+                ('memory', 'Memory',       'developer_board', 'secondary'),
+                ('nvme',   'NVMe storage', 'storage',         'accent'),
+                ('hdd',    'Mass storage', 'dns',             'positive'),
             ]:
                 extra_cls = 'resource-cpu' if key == 'cpu' else ''
                 with ui.column().classes(f'resource-cell {extra_cls}'):
                     with ui.row().classes('w-full items-center justify-between'):
                         ui.label(name).classes('metric-heading')
-                        ui.icon(icon, size='18px').classes('metric-icon')
+                        ui.icon(icon, size='18px').classes(f'text-{color}')
 
                     if key == 'cpu':
                         with ui.element('div').classes('cpu-dial'):
                             ui.circular_progress(
-                                min=0, max=100, show_value=False, size='112px', color='primary'
+                                min=0, max=100, show_value=False, size='112px', color=color
                             ).bind_value_from(system_stats, 'cpu_percent').props('thickness=0.09')
                             ui.label().bind_text_from(
                                 system_stats, 'cpu_percent', backward=lambda x: f'{x:.1f}%'
-                            ).classes('dial-value')
+                            ).classes(f'dial-value text-{color}')
                         ui.label().bind_text_from(
                             system_stats, 'cpu_temp',
                             backward=lambda x: f'Core temperature  ·  {x:.1f}°C'
@@ -51,11 +51,11 @@ def render_server_content(on_nav_to_plugs=None):
                             ui.label().bind_text_from(
                                 system_stats, f'{key}_percent',
                                 backward=lambda x: f'{x:.1f}%'
-                            ).classes('metric-number')
+                            ).classes(f'metric-number text-{color}')
                             ui.label('Capacity used').classes('metric-caption')
                         ui.linear_progress(show_value=False).bind_value_from(
                             system_stats, f'{key}_percent', backward=lambda x: x / 100
-                        ).props('color=primary').classes('metric-bar')
+                        ).props(f'color={color}').classes('metric-bar')
                         with ui.row().classes('w-full justify-between items-center gap-1'):
                             ui.label().bind_text_from(
                                 system_stats, f'{key}_used_gb', backward=lambda x: f'{x:.1f} GB'
@@ -144,24 +144,22 @@ def render_server_content(on_nav_to_plugs=None):
                         total_w += watts
 
                     is_crit = cfg.get("is_critical", False) or cfg.get("is_server", False)
-                    tile_cls = f"iot-plug-tile {'tile-on' if is_on else ''} {'tile-critical' if is_crit else ''} aspect-square flex flex-col justify-between p-4"
+                    tile_cls = f"iot-plug-tile {'tile-on' if is_on else ''} {'tile-critical' if is_crit else ''} flex flex-col justify-between p-4 min-h-[160px]"
                     with ui.card().classes(tile_cls):
                         with ui.row().classes('items-start justify-between w-full'):
                             with ui.column().classes('gap-1'):
-                                ui.icon(cfg.get('icon', 'power'), size='sm').classes(
-                                    'text-emerald-500' if is_on else 'text-slate-400'
-                                )
+                                ui.icon(cfg.get('icon', 'power'), size='sm').classes('text-slate-500')
                                 with ui.column().classes('gap-0 mt-1'):
                                     ui.label(cfg["name"]).classes(
-                                        'text-sm font-bold text-slate-800 dark:text-slate-200 leading-tight'
+                                        'text-base font-bold text-slate-800 dark:text-slate-200 leading-tight'
                                     )
-                                    ui.label(cfg.get("zone", "Homelab")).classes('text-[10px] text-slate-400')
+                                    ui.label(cfg.get("zone", "Homelab")).classes('text-xs text-slate-500')
                             if is_crit:
-                                ui.icon('lock', size='14px').classes('text-rose-500').tooltip('Protected Infrastructure')
+                                ui.icon('lock', size='16px').classes('text-slate-500').tooltip('Protected Infrastructure')
 
-                        with ui.row().classes('items-end justify-between w-full mt-auto'):
+                        with ui.row().classes('items-end justify-between w-full mt-4'):
                             ui.label(f"{watts:.1f} W" if is_on else "OFF").classes(
-                                f"text-xs font-bold uppercase tracking-wider {'text-emerald-500 dark:text-emerald-400' if is_on else 'text-slate-400'}"
+                                f"text-sm font-bold tracking-wide {'text-emerald-700 dark:text-emerald-500' if is_on else 'text-slate-400'}"
                             )
 
                             def make_toggle_handler(dk=dev_key, crit=is_crit):
@@ -195,7 +193,7 @@ def render_server_content(on_nav_to_plugs=None):
                                 'ON' if is_on else 'OFF',
                                 on_click=make_toggle_handler(dev_key, is_crit)
                             ).props('unelevated rounded').classes(
-                                f"text-[11px] font-bold px-3 py-1 transition-colors {'bg-emerald-500 text-white hover:bg-emerald-600' if is_on else 'bg-blue-500 text-white hover:bg-blue-600'}"
+                                f"text-xs font-bold px-4 py-1.5 transition-colors {'bg-blue-600 text-white hover:bg-blue-700' if is_on else 'bg-slate-200 text-slate-600 hover:bg-slate-300'}"
                             )
 
             server_fleet_watts_label.set_text(f"{total_w:.1f} W total")
@@ -215,8 +213,8 @@ def render_server_content(on_nav_to_plugs=None):
                             state.ai_insights = "⏳ Generating system analysis..."
                             result = await run.io_bound(run_deepseek_analysis)
                             state.ai_insights = f"🕒 {datetime.now().strftime('%H:%M')}\n\n{result}"
-                        ui.button('⚡ Generate', on_click=generate_analysis).props('dense flat rounded').classes(
-                            'text-xs text-blue-500 dark:text-blue-400 hover:bg-blue-500/10 px-2'
+                        ui.button('⚡ GENERATE', on_click=generate_analysis).props('flat color="primary" dense').classes(
+                            'font-bold tracking-wider hover:bg-blue-500/10'
                         )
                     ui.label().bind_text_from(state, 'ai_insights').classes(
                         'text-slate-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed'

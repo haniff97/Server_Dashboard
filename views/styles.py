@@ -80,7 +80,8 @@ def add_common_styles():
             min-height:37px; padding:0 20px;
             border-radius:9px!important; font-size:12px; font-weight:500!important;
         }
-        body .workspace-nav.q-btn-group .q-btn.bg-primary {
+        body .workspace-nav.q-btn-group .q-btn.bg-primary,
+        body .workspace-nav.q-btn-group .q-btn.bg-primary.text-white {
             background:var(--surface)!important;
             --q-primary:var(--surface)!important;
             color:var(--ink)!important;
