@@ -203,7 +203,7 @@ def render_server_content(on_nav_to_plugs=None):
 
         # ── 3. AI Analysis Card ──────────────────────────────────────────────
         with ui.card().classes('glass-card analysis-panel w-full'):
-            with ui.row().classes('items-start gap-4'):
+            with ui.row().classes('items-start gap-4 w-full'):
                 with ui.column().classes('w-full'):
                     with ui.row().classes('items-center justify-between w-full mb-1'):
                         ui.label('DeepMind analysis').classes(
