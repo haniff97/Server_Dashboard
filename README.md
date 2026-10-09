@@ -15,7 +15,7 @@ A real-time monitoring and control system for a self-hosted home server. Built w
 ### ⚡ Energy Monitor
 - Real-time **wattage, voltage, and current** per smart plug
 - **Daily / Weekly / Monthly** energy history charts
-- **Estimated cost** calculated against TNB (Malaysian) tiered electricity tariffs
+- **Estimated cost** calculated using TNB Domestic General tariffs with shared monthly usage allocation
 
 ### 🔌 Smart Plugs (Tuya Local LAN)
 - Direct **LAN polling** via `tinytuya` — no Tuya cloud dependency
@@ -31,6 +31,74 @@ A real-time monitoring and control system for a self-hosted home server. Built w
 ### ☁️ Cloud Monitor (`/cloud`)
 - Mirrors energy readings stored in **AWS DynamoDB**
 - Per-device today's summary + last 15 readings table
+
+---
+
+## Recent fixes (9 October 2026)
+
+### Switch response delay
+
+**Problem:** The switch handler waited for both the plug command and the database
+log write before updating the UI. A slow database could therefore leave the button
+showing the old state even after the physical plug had switched. The button also
+allowed repeated clicks while a command was still running.
+
+**Solution:** In `controllers/plug_controller.py`, `toggle_plug()` now returns after
+the plug acknowledges the command and updates the cached switch state. It schedules
+`_log_switch_change()` as a background task instead of awaiting the database write.
+Tasks are retained until completion, and logging errors are reported in server logs
+without changing a successful device command into a failed command.
+
+In `views/plugs_view.py`, `_toggle_with_pending()` disables the device button and
+shows a loading indicator while the command runs. It restores the button in a
+`finally` block, including when a command fails. Periodic refreshes leave the pending
+button's label and styling alone. Existing critical-device confirmation remains.
+
+**Result:** Database latency no longer blocks the switch response. This does not
+remove LAN connection latency: commands still open a fresh Tuya connection with the
+existing timeout and retry settings. Live hardware response times have not been
+measured. Background logs are best effort; an abrupt shutdown can interrupt a write.
+Restart the dashboard process to load the changes.
+
+### TNB residential charge calculation
+
+**Problem:** The dashboard used old Tariff A rates, applied monthly brackets to
+individual device/day totals, and used a hardcoded RM0.218/kWh in the design preview
+chart. This could produce inconsistent estimates and repeat monthly charges when
+adding up device costs.
+
+**Solution:** `services/tnb_tariff.py` provides one Domestic General calculator used
+by the database services and design preview. It includes energy, capacity, network,
+efficiency incentives, retail charge, AFA, service tax and KWTBB. Device/day costs
+are allocated proportionally from a shared monitored calendar-month total. Production
+charts group readings by their actual month before calculating cost.
+
+The October 2026 AFA is +3.61 sen/kWh. The temporary 800 kWh protection applies for
+September–December 2026. Rates were checked against [TNB's tariff calculator](https://www.mytnb.com.my/tariff)
+and its published calculator code on 9 October 2026. Future AFA forecasts are excluded;
+update the local AFA table after each official publication. Missing AFA for a chargeable
+month raises an error rather than silently reusing an old rate.
+
+**Result and limits:** Costs are estimates for monitored loads, not the full household
+bill. Unmonitored appliances, overlapping plug measurements, actual meter-cycle dates,
+minimum charges, special rebates, NEM/ToU and September adjustment credits can change
+the real bill. Raw monthly energy records must remain available for the allocation
+basis. See [TNB_TARIFF.md](TNB_TARIFF.md) for calculation scope and maintenance details.
+
+### Validation
+
+Eight automated tests passed: three switch-response tests and five tariff tests.
+The switch tests cover slow database logging, failed device commands, and logging
+failures after successful commands. Tariff checks cover bracket boundaries, shared
+allocation, month grouping, invalid inputs and unpublished AFA. Another 23 October
+usage cases matched TNB's official calculator. Python compilation and `git diff --check`
+also passed.
+
+Run the automated checks from the project root:
+
+```bash
+python3 -m unittest test_switch_response test_tnb_tariff -v
+```
 
 ---
 
@@ -60,6 +128,7 @@ Server_Dashboard/
 │
 ├── services/
 │   ├── db.py                     ← MariaDB queries (energy telemetry, state changes)
+│   ├── tnb_tariff.py             ← Shared TNB Domestic General monthly cost calculator
 │   ├── tuya_local.py             ← tinytuya device config & LAN helpers
 │   ├── aws_iot_publisher.py      ← AWS IoT Core / DynamoDB publisher
 │   └── cloud_db.py               ← DynamoDB read queries for /cloud page
