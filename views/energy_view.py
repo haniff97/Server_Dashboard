@@ -25,25 +25,26 @@ def render_energy_content():
         with ui.grid().classes('w-full gap-4 sm:gap-6 grid-cols-1 md:grid-cols-3 items-stretch'):
 
             # 1. Live Power
-            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center relative overflow-hidden'):
+            with ui.card().classes('glass-card energy-summary p-5 flex flex-col items-start justify-center relative overflow-hidden'):
                 ui.label('LIVE POWER').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
                 ui.icon('bolt', size='sm', color='warning').classes('absolute top-4 right-4 opacity-30')
-                live_power_label = ui.label('0.0').classes('text-5xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-yellow-400 to-orange-500 mt-6 drop-shadow-[0_0_15px_rgba(245,158,11,0.4)] transition-all duration-300')
+                live_power_label = ui.label('0.0').classes('energy-number text-4xl font-semibold mt-6')
                 ui.label('Watts (W)').classes('text-xs text-slate-500 mt-2 uppercase tracking-widest font-semibold')
-                
+
             # 2. Today's Total Energy
-            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center relative overflow-hidden'):
+            with ui.card().classes('glass-card energy-summary p-5 flex flex-col items-start justify-center relative overflow-hidden'):
                 ui.label("TODAY'S ENERGY").classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
                 ui.icon('eco', size='sm', color='positive').classes('absolute top-4 right-4 opacity-30')
-                total_kwh_label = ui.label('0.000').classes('text-5xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-green-400 to-emerald-500 mt-6 drop-shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all duration-300')
+                total_kwh_label = ui.label('0.000').classes('energy-number text-4xl font-semibold mt-6')
                 ui.label('kWh').classes('text-xs text-slate-500 mt-2 uppercase tracking-widest font-semibold')
 
             # 3. Total Cost
-            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center relative overflow-hidden'):
+            with ui.card().classes('glass-card energy-summary p-5 flex flex-col items-start justify-center relative overflow-hidden'):
                 ui.label("TOTAL COST").classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
                 ui.icon('payments', size='sm', color='primary').classes('absolute top-4 right-4 opacity-30')
-                cost_label = ui.label('0.00').classes('text-5xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-blue-400 to-indigo-500 mt-6 drop-shadow-[0_0_15px_rgba(59,130,246,0.4)] transition-all duration-300')
-                ui.label('RM (TNB Tariff A)').classes('text-xs text-slate-500 mt-2 uppercase tracking-widest font-semibold')
+                cost_label = ui.label('0.00').classes('energy-number text-4xl font-semibold mt-6')
+                ui.label('RM (Domestic General estimate)').classes('text-xs text-slate-500 mt-2 uppercase tracking-widest font-semibold')
+
 
         # ── 2. Secondary Metrics & Device Selector ────────────────────────────
         with ui.row().classes('w-full gap-4 sm:gap-6 items-stretch flex-col lg:flex-row'):
@@ -241,9 +242,9 @@ def render_energy_content():
                         area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
                         area_chart.options['series'][0]['name'] = 'Energy (kWh)'
                         
-                    total_kwh_sum = sum(values)
-                    chart_cost.set_text(f"EST. COST: RM {db.calculate_tnb_cost(total_kwh_sum):.2f}")
+                    chart_cost.set_text(f"EST. COST: RM {await run.io_bound(db.estimate_history_cost, pts):.2f}")
                 except Exception as e:
+                    chart_cost.set_text("EST. COST: unavailable")
                     print(f"[energy_view] Chart error: {e}")
             else:
                 area_chart.options['yAxis'][0]['name'] = 'Watts'

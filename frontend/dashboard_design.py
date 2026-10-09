@@ -5,6 +5,10 @@ Built with NiceGUI + Mock Data (Simulating tinytuya local LAN + MariaDB)
 Pages: / (Server) | /energy (Energy Monitor) | /plugs (Smart Plugs)
 """
 import os
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from services.tnb_tariff import calculate_tnb_cost, allocate_tnb_cost
 import asyncio
 import threading
 import time
@@ -50,7 +54,7 @@ def update_network_mock_data():
     for target, data in network_state["targets"].items():
         data["latency"] = max(5.0, min(150.0, data["latency"] + random.uniform(-2, 2)))
         data["history"].append(data["latency"])
-        
+
         if random.random() > 0.98:
             data["packet_loss"] = round(random.uniform(1.0, 5.0), 1)
             data["status"] = "warn"
@@ -60,11 +64,11 @@ def update_network_mock_data():
         else:
             data["packet_loss"] = 0.0
             data["status"] = "ok"
-            
+
     if all(d["status"] == "ok" for d in network_state["targets"].values()):
         network_state["health"] = "GOOD"
         network_state["ai_insights"] = "🤖 Network AI Active...\n💡 All routes stable. Latency is optimal."
-    
+
     if len(network_state["route_log"]) > 10:
         network_state["route_log"].pop()
 
@@ -326,16 +330,10 @@ DEVICE_DAILY_BASE_KWH = {
 }
 
 def mock_calculate_tnb_cost(kwh: float) -> float:
-    """Simulate db.calculate_tnb_cost()."""
-    tiers = [(200, 0.218), (100, 0.334), (300, 0.516), (float("inf"), 0.546)]
-    cost, remaining = 0.0, kwh
-    for limit, rate in tiers:
-        if remaining <= 0:
-            break
-        usage = min(remaining, limit)
-        cost += usage * rate
-        remaining -= usage
-    return round(cost, 4)
+    """Allocate cost using the mock fleet's shared calendar-month total."""
+    monthly = sum(DEVICE_DAILY_BASE_KWH.get(cfg['id'], .5) + cfg.get('base_month_kwh', 25)
+                  for cfg in MOCK_DEVICES.values())
+    return allocate_tnb_cost(kwh, max(monthly, kwh))
 
 def mock_get_today_summary(dev_id: str) -> dict:
     """Simulate db.get_today_summary() with consistent TNB cost calculation."""
@@ -351,293 +349,229 @@ def mock_get_today_summary(dev_id: str) -> dict:
 #  SHARED STYLES
 # ─────────────────────────────────────────────────────────────────────────────
 def add_common_styles():
-    ui.add_head_html('''
+    ui.add_head_html(r'''
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-            
-            body { 
-                font-family: 'Inter', sans-serif; 
-                background: #F4F4F5;
-                color: #111827; 
-                transition: background 0.3s, color 0.3s; 
-                min-height: 100vh;
-            }
-            body.body--dark { 
-                background: #000000;
-                color: #FFFFFF; 
-            }
-            .glass-card { 
-                background: #FFFFFF;
-                border: 1px solid rgba(0, 0, 0, 0.05); 
-                border-radius: 24px; 
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); 
-                transition: transform 0.2s ease, box-shadow 0.2s ease; 
-            }
-            .glass-card:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06);
-            }
-            body.body--dark .glass-card { 
-                background: #1A1A1A; 
-                border: none; 
-                box-shadow: none;
-            }
-            body.body--dark .glass-card:hover {
-                transform: translateY(-2px);
-            }
-            
-            .dark-highlight-card {
-                background: #0F172A;
-                color: #FFFFFF;
-                border-radius: 24px;
-                box-shadow: 0 10px 25px rgba(15, 23, 42, 0.2);
-            }
-            body.body--dark .dark-highlight-card {
-                background: #222222;
-                border: 1px solid rgba(255,255,255,0.05);
-                box-shadow: none;
-            }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        :root {
+            --canvas:#f3f5f8; --surface:#ffffff; --inset:#f7f9fc;
+            --stroke:#e2e8f0; --hover-stroke:#c1cedc;
+            --ink:#172437; --muted:#607087; --subtle:#687991;
+            --brand:#087f8c; --brand-soft:#e7f5f6; --brand-ink:#076773;
+            --shadow:0 3px 6px rgba(26,45,72,.025),0 12px 32px rgba(26,45,72,.035);
+            --q-primary:#087f8c; --q-secondary:#6557b8; --q-accent:#a66328;
+            --q-positive:#16805e; --q-warning:#b77915; --q-negative:#c23d58;
+        }
+        body.body--dark {
+            --canvas:#101720; --surface:#192330; --inset:#202d3d;
+            --stroke:#2b3a4e; --hover-stroke:#405671;
+            --ink:#edf3fa; --muted:#a6b5c9; --subtle:#99aac0;
+            --brand:#6dd5de; --brand-soft:#203d48; --brand-ink:#9ce7ed;
+            --shadow:0 10px 30px rgba(0,0,0,.12);
+            --q-primary:#6dd5de!important; --q-secondary:#b5a7f4!important; --q-accent:#e5b180!important;
+            --q-positive:#65d5ae!important; --q-warning:#edc478!important; --q-negative:#f18ca2!important;
+            color-scheme:dark;
+        }
+        body { font-family:'Inter',system-ui,sans-serif; background:var(--canvas); color:var(--ink);
+            min-height:100vh; -webkit-font-smoothing:antialiased; }
+        .glass-card, .plug-card, .plug-card-modern, .split-card, .iot-plug-tile {
+            background:var(--surface); border:1px solid var(--stroke);
+            border-radius:20px; box-shadow:var(--shadow); transition:border-color .18s ease;
+        }
+        .glass-card:hover, .plug-card-modern:hover, .iot-plug-tile:hover {
+            border-color:var(--hover-stroke); transform:none;
+        }
+        .plug-card, .plug-card-modern, .split-card { overflow:hidden; }
+        .iot-plug-tile { border-radius:16px; padding:14px; background:var(--inset); box-shadow:none; }
+        .glass-header { background:color-mix(in srgb,var(--canvas) 92%,transparent);
+            backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+            border-bottom:1px solid var(--stroke); color:var(--ink); }
+        .dark-highlight-card { background:linear-gradient(125deg,#0c5361,#153349);
+            color:#f0fdfa; border:1px solid #285266; border-radius:20px; box-shadow:var(--shadow); }
+        .split-card { display:flex; }
+        .split-left { background:var(--brand-soft); color:var(--brand-ink); padding:24px; flex:1; }
+        .split-right { background:var(--surface); padding:24px; flex:2; }
+        .plug-stat-strip, .plug-energy-row { display:flex; flex-wrap:wrap; gap:16px;
+            background:var(--inset); padding:16px 18px; border-radius:14px; }
+        .plug-stat-strip { align-items:center; }
+        .plug-inner-card { background:var(--inset); border:1px solid var(--stroke);
+            border-radius:14px; padding:16px 18px; margin-top:12px; }
+        .plug-stat-num, .stat-value { font-size:1.5rem; font-weight:700; line-height:1.2; color:var(--ink); }
+        .stat-value { color:var(--brand); }
+        .plug-stat-lbl, .stat-label, .plug-section-title { font-size:11px; font-weight:600;
+            color:var(--muted); letter-spacing:.06em; text-transform:uppercase; }
+        .plug-section-title { margin-bottom:10px; }
+        .plug-sep { width:1px; height:36px; background:var(--stroke); }
+        .plug-card-modern.plug-active, .plug-card.plug-on { border-color:color-mix(in srgb,var(--brand) 35%,var(--stroke)); }
+        .plug-card-modern.plug-critical { border-left:3px solid var(--q-warning); }
+        .plug-switch-btn, .plug-toggle, .plug-ctrl-btn, .plug-led-btn, .filter-chip-btn {
+            font-family:inherit!important; border-radius:10px!important; font-weight:600!important;
+            box-shadow:none!important; letter-spacing:0!important;
+        }
+        .plug-switch-btn { padding:7px 16px!important; font-size:12px!important; }
+        .plug-switch-on, .plug-toggle-on { background:var(--brand-soft)!important;
+            color:var(--brand-ink)!important; border:1px solid color-mix(in srgb,var(--brand) 25%,transparent)!important; }
+        .plug-switch-off, .plug-toggle-off { background:var(--inset)!important; color:var(--muted)!important;
+            border:1px solid var(--stroke)!important; }
+        .plug-switch-warn, .plug-toggle-warn { background:var(--q-negative)!important; color:var(--canvas)!important; }
+        .plug-toggle { width:100%; padding:14px 0!important; }
+        .plug-ctrl-btn, .plug-led-btn { background:var(--inset)!important; color:var(--ink)!important;
+            border:1px solid var(--stroke)!important; padding:9px 14px!important; font-size:12px!important; }
+        .plug-led-btn { flex:1; min-width:70px; }
+        .plug-ctrl-btn:hover, .plug-led-btn:hover { border-color:var(--brand)!important; }
+        .filter-chip-btn { padding:4px 12px!important; font-size:12px!important; }
+        .pulse-dot-online, .pulse-dot-offline, .dot-ok, .dot-err {
+            display:inline-block; width:8px; height:8px; border-radius:50%; box-shadow:none; }
+        .pulse-dot-online, .dot-ok { background:var(--q-positive); }
+        .pulse-dot-offline, .dot-err { background:var(--q-negative); }
+        .plug-warn-banner { display:none; background:var(--brand-soft); color:var(--ink);
+            border:1px solid var(--q-warning); border-radius:12px; padding:12px 16px; margin-top:10px; font-size:12px; }
+        .plug-warn-banner.visible { display:block; }
+        .q-btn-group { background:var(--inset)!important; padding:4px; border:1px solid var(--stroke)!important;
+            border-radius:14px!important; box-shadow:none!important; }
+        body .q-btn-group .q-btn { color:var(--muted)!important; border-radius:10px!important;
+            font-weight:600!important; font-size:12px; letter-spacing:0; }
+        body .q-btn-group .q-btn.bg-primary { background:var(--surface)!important;
+            color:var(--brand-ink)!important; box-shadow:0 2px 5px rgba(0,0,0,.07)!important; }
+        .q-btn { font-variant-numeric:tabular-nums; }
+        .glass-card .q-linear-progress__model { opacity:.28; }
+        .glass-card .q-linear-progress__track { opacity:.08; }
+        .glass-card .q-separator { background:var(--stroke)!important; }
+        .q-btn:focus-visible { outline:2px solid var(--brand); outline-offset:3px; }
+        .q-field--outlined .q-field__control { border-radius:12px!important; background:var(--inset); }
+        .q-field--outlined .q-field__control:before { border-color:var(--stroke)!important; background:transparent!important; }
+        .q-field:hover .q-field__control:before { border-color:var(--hover-stroke)!important; }
+        .glass-menu { background:var(--surface)!important; color:var(--ink)!important;
+            border:1px solid var(--stroke)!important; border-radius:14px!important; box-shadow:var(--shadow)!important; padding:4px; }
+        .glass-menu .q-item { border-radius:9px; margin:2px; }
+        .glass-menu .q-item:hover, .glass-menu .q-item--active { background:var(--brand-soft)!important; color:var(--brand-ink)!important; }
+        /* Existing utility colors use matching contrast in either theme. */
+        [class~="text-slate-400"], [class~="text-slate-500"], [class~="text-slate-600"] { color:var(--muted)!important; }
+        [class~="text-slate-700"], [class~="text-slate-800"], [class~="text-slate-900"] { color:var(--ink)!important; }
+        [class~="text-blue-500"], [class~="text-blue-600"] { color:var(--brand)!important; }
+        [class~="text-emerald-500"], [class~="text-teal-600"] { color:var(--q-positive)!important; }
+        [class~="text-amber-500"], [class~="text-orange-500"] { color:var(--q-warning)!important; }
+        [class~="text-rose-500"] { color:var(--q-negative)!important; }
+        [class~="text-purple-700"] { color:var(--q-secondary)!important; }
+        .glass-card [class~="bg-slate-200"], .glass-header [class~="bg-slate-200"] { background:var(--inset)!important; }
+        .animate-pulse { animation:none!important; }
+        .hover\:scale-\[1\.02\]:hover { transform:none!important; }
+        @media (prefers-reduced-motion:reduce) { * { transition:none!important; animation:none!important; } }
 
-            .split-card {
-                border-radius: 24px;
-                overflow: hidden;
-                display: flex;
-                background: #FFFFFF;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
-                border: 1px solid rgba(0, 0, 0, 0.05);
-            }
-            .split-left {
-                background: #E11D48;
-                color: #FFFFFF;
-                padding: 24px;
-                flex: 1;
-            }
-            .split-right {
-                background: #FFFFFF;
-                padding: 24px;
-                flex: 2;
-            }
-            body.body--dark .split-card {
-                background: #1A1A1A;
-                border: none;
-                box-shadow: none;
-            }
-            body.body--dark .split-left {
-                background: #222222;
-                color: #FFFFFF;
-            }
-            body.body--dark .split-right {
-                background: #1A1A1A;
-            }
 
-            .glass-header { 
-                background: rgba(244, 244, 245, 0.8); 
-                backdrop-filter: blur(16px); 
-                -webkit-backdrop-filter: blur(16px);
-                border-bottom: 1px solid rgba(0, 0, 0, 0.05); 
-            }
-            body.body--dark .glass-header { 
-                background: rgba(0, 0, 0, 0.8); 
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1); 
-            }
-            
-            .stat-value { font-family:'Inter',sans-serif; font-size:1.5rem; font-weight:800; color:#E11D48; }
-            body.body--dark .stat-value { color: #39FF14; }
-            .stat-label { font-size:.75rem; color:#6B7280; text-transform:uppercase; font-weight:700; letter-spacing:.05em; }
-            body.body--dark .stat-label { color:#A1A1AA; }
-
-            /* Plug page styles */
-            .plug-card { background:#FFFFFF; border:1px solid rgba(0,0,0,.05); border-radius:24px; overflow:hidden; transition:all .3s; box-shadow: 0 4px 20px rgba(0,0,0,0.03); }
-            body.body--dark .plug-card { background:#1A1A1A; border:none; box-shadow:none; }
-            .plug-card.plug-on { border: 1px solid rgba(225, 29, 72, 0.3); box-shadow:0 0 20px rgba(225, 29, 72, 0.1); }
-            body.body--dark .plug-card.plug-on { border: 1px solid rgba(57, 255, 20, 0.3); box-shadow:none; }
-            
-            /* Modern Scalable Plug Cards */
-            .plug-card-modern {
-                background: #FFFFFF;
-                border: 1px solid rgba(0, 0, 0, 0.06);
-                border-radius: 20px;
-                overflow: hidden;
-                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-                box-shadow: 0 2px 12px rgba(0, 0, 0, 0.03);
-            }
-            .plug-card-modern:hover {
-                transform: translateY(-3px);
-                box-shadow: 0 12px 28px rgba(0, 0, 0, 0.07);
-            }
-            body.body--dark .plug-card-modern {
-                background: #161A22;
-                border: 1px solid rgba(255, 255, 255, 0.06);
-                box-shadow: none;
-            }
-            body.body--dark .plug-card-modern:hover {
-                transform: translateY(-3px);
-                border-color: rgba(255, 255, 255, 0.16);
-                box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
-            }
-            .plug-card-modern.plug-active {
-                border-color: rgba(16, 185, 129, 0.35);
-            }
-            body.body--dark .plug-card-modern.plug-active {
-                border-color: rgba(16, 185, 129, 0.3);
-                box-shadow: 0 0 20px rgba(16, 185, 129, 0.06);
-            }
-            .plug-card-modern.plug-critical {
-                border-left: 4px solid #F43F5E;
-            }
-
-            .plug-switch-btn {
-                border-radius: 999px !important;
-                font-family: 'Inter', sans-serif !important;
-                font-weight: 700 !important;
-                font-size: 0.78rem !important;
-                letter-spacing: 0.04em !important;
-                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-                border: none !important;
-                padding: 7px 16px !important;
-            }
-            .plug-switch-on {
-                background: #10B981 !important;
-                color: #FFFFFF !important;
-                box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3) !important;
-            }
-            body.body--dark .plug-switch-on {
-                background: #10B981 !important;
-                color: #042F1A !important;
-                font-weight: 800 !important;
-                box-shadow: 0 0 16px rgba(16, 185, 129, 0.4) !important;
-            }
-            .plug-switch-off {
-                background: #F1F5F9 !important;
-                color: #64748B !important;
-            }
-            body.body--dark .plug-switch-off {
-                background: #242A35 !important;
-                color: #94A3B8 !important;
-            }
-            .plug-switch-warn {
-                background: #F43F5E !important;
-                color: #FFFFFF !important;
-                animation: pulse 1.5s infinite;
-            }
-
-            /* IoT Micro Tiles for Server page */
-            .iot-plug-tile {
-                background: #F8FAFC;
-                border: 1px solid rgba(0, 0, 0, 0.05);
-                border-radius: 16px;
-                padding: 12px 14px;
-                transition: all 0.2s ease;
-            }
-            .iot-plug-tile:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
-            }
-            body.body--dark .iot-plug-tile {
-                background: #1A1F29;
-                border: 1px solid rgba(255, 255, 255, 0.05);
-            }
-            body.body--dark .iot-plug-tile:hover {
-                background: #212734;
-                border-color: rgba(255, 255, 255, 0.1);
-            }
-
-            /* Pulse Dot Status */
-            .pulse-dot-online {
-                width: 8px;
-                height: 8px;
-                border-radius: 50%;
-                background: #10B981;
-                display: inline-block;
-                box-shadow: 0 0 8px rgba(16, 185, 129, 0.7);
-            }
-            .pulse-dot-offline {
-                width: 8px;
-                height: 8px;
-                border-radius: 50%;
-                background: #F43F5E;
-                display: inline-block;
-            }
-
-            /* Filter chips */
-            .filter-chip-btn {
-                border-radius: 999px !important;
-                font-size: 0.75rem !important;
-                font-weight: 600 !important;
-                padding: 4px 12px !important;
-                transition: all 0.2s !important;
-            }
-
-            .plug-stat-strip { display:flex; flex-wrap:wrap; gap:16px; align-items:center; background:#F9FAFB; border-radius:16px; padding:14px 18px; }
-            body.body--dark .plug-stat-strip { background:#222222; border:none; }
-            
-            .plug-stat-num { font-family:'Inter',sans-serif; font-size:1.4rem; font-weight:800; line-height:1; color:#111827; }
-            body.body--dark .plug-stat-num { color:#FFFFFF; }
-            
-            .plug-stat-lbl { font-size:.6rem; color:#6B7280; text-transform:uppercase; letter-spacing:.08em; margin-top:3px; font-weight: 700; }
-            body.body--dark .plug-stat-lbl { color:#A1A1AA; }
-            
-            .plug-sep { width:1px; height:36px; background:rgba(0,0,0,.05); }
-            body.body--dark .plug-sep { background:rgba(255,255,255,.05); }
-
-            .plug-toggle { width:100%; padding:14px 0!important; border-radius:999px!important; font-family:'Inter',sans-serif!important; font-size:.85rem!important; font-weight:700!important; letter-spacing:.05em!important; transition:all .3s ease!important; border:none!important;}
-            .plug-toggle-on  { background:#E11D48!important; color:#ffffff!important; box-shadow: 0 4px 15px rgba(225, 29, 72, 0.2)!important;}
-            body.body--dark .plug-toggle-on { background:#39FF14!important; color:#000000!important; box-shadow: none!important; }
-            .plug-toggle-off { background:#F3F4F6!important; color:#4B5563!important; }
-            body.body--dark .plug-toggle-off { background:#222222!important; color:#A1A1AA!important; }
-            .plug-toggle-warn { background:#FF5E00!important; color:#ffffff!important; box-shadow: 0 4px 15px rgba(255, 94, 0, 0.3)!important;}
-            body.body--dark .plug-toggle-warn { background:#FF5E00!important; color:#000000!important; box-shadow: none!important; }
-
-            .plug-energy-row { display:flex; flex-wrap:wrap; gap:10px; background:#F9FAFB; border-radius:16px; padding:14px 18px; }
-            body.body--dark .plug-energy-row { background:#222222; }
-
-            .plug-ctrl-btn { background:#F3F4F6!important; border:none!important; border-radius:999px!important; color:#4B5563!important; font-family:'Inter',sans-serif!important; font-weight:600!important; font-size:.75rem!important; padding:9px 16px!important; transition:all .2s!important; }
-            body.body--dark .plug-ctrl-btn { background:#222222!important; color:#E5E7EB!important; }
-            .plug-ctrl-btn:hover { background:#E5E7EB!important; color:#111827!important; }
-            body.body--dark .plug-ctrl-btn:hover { background:#333333!important; color:#FFFFFF!important; }
-
-            .plug-led-btn { background:#F3F4F6!important; border:none!important; border-radius:999px!important; color:#4B5563!important; font-weight:600!important; font-size:.7rem!important; padding:8px 12px!important; transition:all .2s!important; flex:1; min-width:70px; }
-            body.body--dark .plug-led-btn { background:#222222!important; color:#A1A1AA!important; }
-            .plug-led-btn:hover { background:#E5E7EB!important; color:#111827!important; }
-            body.body--dark .plug-led-btn:hover { background:#333333!important; color:#FFFFFF!important; }
-
-            .dot-ok  { width:10px;height:10px;border-radius:50%;background:#E11D48;display:inline-block; }
-            body.body--dark .dot-ok { background:#39FF14; }
-            .dot-err { width:10px;height:10px;border-radius:50%;background:#F87171;display:inline-block; }
-            body.body--dark .dot-err { background:#FF5E00; }
-
-            .plug-warn-banner { background:#FEF2F2; border-radius:16px; padding:12px 16px; margin-top:10px; font-family:'Inter',sans-serif; font-size:.75rem; color:#991B1B; font-weight:500; display:none; }
-            body.body--dark .plug-warn-banner { background:#431407; color:#FFEDD5; }
-            .plug-warn-banner.visible { display:block; }
-
-            .plug-section-title { font-family:'Inter',sans-serif; font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:#6B7280; margin-bottom:10px; font-weight: 700; }
-            body.body--dark .plug-section-title { color:#A1A1AA; }
-            
-            .plug-inner-card { background:#F9FAFB; border-radius:20px; padding:16px 18px; margin-top:12px; }
-            body.body--dark .plug-inner-card { background:#222222; }
-
-            /* Select & Dropdown styling */
-            .q-field--outlined .q-field__control { border-radius: 999px !important; }
-            .q-field--outlined .q-field__control:before { border: 1px solid rgba(0, 0, 0, 0.1) !important; background: #FFFFFF !important; transition: all 0.3s; }
-            body.body--dark .q-field--outlined .q-field__control:before { border: none !important; background: #222222 !important; }
-            .q-field:hover .q-field__control:before { border-color: rgba(0, 0, 0, 0.2) !important; }
-            body.body--dark .q-field:hover .q-field__control:before { background: #2A2A2A !important; }
-            
-            .glass-menu { background: #FFFFFF !important; border: 1px solid rgba(0, 0, 0, 0.05) !important; border-radius: 16px !important; box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important; padding: 4px 0; }
-            body.body--dark .glass-menu { background: #1A1A1A !important; border: 1px solid rgba(255,255,255,0.05) !important; color: #FFFFFF !important; box-shadow: 0 10px 25px rgba(0,0,0,0.5) !important;}
-            .glass-menu .q-item { border-radius: 12px; margin: 2px 6px; transition: all 0.2s; }
-            .glass-menu .q-item:hover { background: #F3F4F6 !important; }
-            body.body--dark .glass-menu .q-item:hover { background: #222222 !important; }
-            .glass-menu .q-item--active { background: #E11D48 !important; color: #FFFFFF !important; font-weight: 600; }
-            body.body--dark .glass-menu .q-item--active { background: #39FF14 !important; color: #000000 !important; }
-
-            /* Active Toggle for navigation */
-            .q-btn-group { border-radius: 999px !important; background: #F3F4F6 !important; padding: 4px; box-shadow: none !important; border: 1px solid rgba(0,0,0,0.05) !important; }
-            body.body--dark .q-btn-group { background: #1A1A1A !important; border: none !important; }
-            .q-btn-group .q-btn { border-radius: 999px !important; font-weight: 600 !important; color: #6B7280 !important; }
-            body.body--dark .q-btn-group .q-btn { color: #A1A1AA !important; }
-            .q-btn-group .q-btn.bg-primary { background: #0F172A !important; color: #FFFFFF !important; }
-            body.body--dark .q-btn-group .q-btn.bg-primary { background: #333333 !important; color: #FFFFFF !important; border: 1px solid rgba(255,255,255,0.1) !important; }
+        /* Horizon: one accent, quiet surfaces, generous typography. */
+        :root { --canvas:#f4f5f7; --surface:#ffffff; --inset:#f6f7f9; --stroke:#e5e8ed;
+            --ink:#202935; --muted:#687482; --brand:#426caa; --brand-soft:#edf2f9; --brand-ink:#345d95;
+            --shadow:0 3px 14px rgba(25,40,65,.025); }
+        body.body--dark { --canvas:#101317; --surface:#1a1f26; --inset:#212831; --stroke:#303842;
+            --ink:#eef1f5; --muted:#a1acb9; --brand:#a8c4ed; --brand-soft:#2b3a4e; --brand-ink:#c2d6f5;
+            --shadow:none; --q-primary:#a8c4ed!important; --q-positive:#80c1a7!important; }
+        body .glass-card, body .plug-card-modern, body .split-card {
+            background:var(--surface)!important; border:1px solid var(--stroke)!important;
+            border-radius:20px; box-shadow:var(--shadow)!important;
+        }
+        .q-layout__section--marginal.app-topbar { background:var(--canvas); color:var(--ink); }
+        .app-topbar { height:88px; padding:18px max(24px,calc((100vw - 1240px)/2)); border-bottom:1px solid var(--stroke); box-shadow:none; }
+        .brand-symbol { width:37px; height:37px; border-radius:12px; background:var(--ink);
+            color:var(--surface); display:grid; place-items:center; }
+        .brand-name { font-size:21px; font-weight:650; letter-spacing:-.8px; line-height:1.1; }
+        .brand-caption { color:var(--muted); font-size:8px; font-weight:600; letter-spacing:1.5px; margin-top:5px; }
+        .shell-update { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
+        .theme-button { color:var(--muted); background:var(--surface); border:1px solid var(--stroke); }
+        body .workspace-nav.q-btn-group { display:flex; gap:4px; background:var(--inset)!important;
+            padding:5px; border:1px solid var(--stroke)!important; border-radius:14px!important; box-shadow:none!important; }
+        body .workspace-nav.q-btn-group .q-btn { min-height:37px; padding:0 20px;
+            border-radius:9px!important; font-size:12px; font-weight:500!important; }
+        body .workspace-nav.q-btn-group .q-btn.bg-primary { background:var(--surface)!important;
+            --q-primary:var(--surface)!important; color:var(--ink)!important; box-shadow:0 2px 5px rgba(0,0,0,.05)!important; }
+        body .workspace-nav .q-btn .q-btn__content,
+        body .workspace-nav .q-btn .q-btn__content * { color:var(--ink)!important; }
+        .q-page-container { padding-top:88px!important; }
+        .q-page { min-height:calc(100vh - 88px)!important; }
+        .q-page > .nicegui-content { padding:0; }
+        .dashboard-main { width:100%; max-width:1288px; margin:0 auto; padding:34px 24px 48px; gap:28px; }
+        .page-heading { padding-bottom:0; }
+        .page-eyebrow { font-size:9px; color:var(--muted); font-weight:600; letter-spacing:1.6px; margin-bottom:4px; }
+        .page-title { font-size:36px; font-weight:600; letter-spacing:-1.5px; color:var(--ink); line-height:1.2; }
+        .page-description { font-size:13px; color:var(--muted); margin-top:5px; }
+        .resource-grid { grid-template-columns:1.1fr 1fr 1fr 1fr; padding:0!important; gap:0!important; overflow:hidden; }
+        .resource-cell { padding:25px 28px; gap:12px; min-height:248px; border-right:1px solid var(--stroke); }
+        .resource-cell:last-child { border-right:0; }
+        .resource-cpu { --resource-accent:#2563eb; align-items:center;
+            background:color-mix(in srgb,var(--resource-accent) 8%,var(--surface)); }
+        .resource-memory { --resource-accent:#7c3aed; }
+        .resource-nvme { --resource-accent:#b45309; }
+        .resource-hdd { --resource-accent:#059669; }
+        body.body--dark .resource-cpu { --resource-accent:#60a5fa; }
+        body.body--dark .resource-memory { --resource-accent:#a78bfa; }
+        body.body--dark .resource-nvme { --resource-accent:#fbbf24; }
+        body.body--dark .resource-hdd { --resource-accent:#34d399; }
+        .resource-cell { --q-primary:var(--resource-accent)!important; }
+        .resource-cell .metric-number, .resource-cell .dial-value,
+        .resource-cell .metric-icon { color:var(--resource-accent); }
+        .resource-cell .metric-icon { opacity:1; }
+        .metric-heading { font-size:12px; font-weight:600; color:var(--muted); }
+        .metric-icon { color:var(--muted); opacity:.65; }
+        .metric-reading { margin-top:13px; margin-bottom:3px; }
+        .metric-number { font-size:43px; font-weight:550; letter-spacing:-2px; line-height:1.2;
+            font-variant-numeric:tabular-nums; color:var(--ink); }
+        .metric-caption, .metric-footnote { font-size:11px; color:var(--muted); line-height:1.5; font-variant-numeric:tabular-nums; }
+        .metric-footnote { padding-top:9px; margin-top:auto; }
+        .cpu-dial { position:relative; margin:6px auto 2px; width:112px; height:112px; }
+        .dial-value { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+            font-size:24px; font-weight:600; letter-spacing:-1px; color:var(--ink); }
+        .metric-bar { height:8px; border-radius:2px; margin-top:4px; }
+        .resource-cell .q-linear-progress__model { opacity:1; }
+        .resource-cell .q-linear-progress__track { opacity:.08; }
+        .sensor-card { padding:22px!important; min-height:172px; gap:14px; }
+        body .sensor-card .q-badge.bg-positive { --q-positive:var(--inset); color:var(--muted)!important; padding:4px 8px; }
+        .room-readings { margin-top:5px; }
+        .room-temperature { font-size:43px; font-weight:500; letter-spacing:-2px; line-height:1.1; color:var(--ink); }
+        .room-caption { font-size:8px; font-weight:600; letter-spacing:1px; color:var(--muted); }
+        .room-secondary { color:var(--muted); padding-bottom:3px; }
+        .room-detail { font-size:12px; font-variant-numeric:tabular-nums; }
+        .quick-device-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+        body .fleet-overview { padding:22px!important; }
+        .iot-plug-tile { background:var(--inset); border-radius:12px; padding:15px!important; gap:14px; box-shadow:none; }
+        .iot-plug-tile .q-btn { background:var(--surface)!important; color:var(--ink)!important;
+            border:1px solid var(--stroke); border-radius:8px; min-width:48px; box-shadow:none; }
+        .iot-plug-tile .q-icon { color:var(--muted)!important; }
+        .iot-plug-tile .q-label[class~="text-teal-600"] { color:var(--ink)!important; }
+        .analysis-panel { margin-top:0!important; padding:18px 22px!important; border-left:1px solid var(--stroke)!important; }
+        .analysis-panel .q-label { font-size:12px; }
+        .analysis-panel .q-label:first-child { text-transform:none; letter-spacing:0; font-weight:600; }
+        .energy-summary { min-height:172px; }
+        .energy-number { color:var(--ink); font-variant-numeric:tabular-nums; letter-spacing:-1.2px; font-size:43px; }
+        .split-left { flex:0 0 200px; padding:24px; }
+        .split-left .text-3xl { font-size:25px; font-weight:600; }
+        .plug-card-modern { padding:20px!important; }
+        .plug-card-modern.plug-active { border-color:var(--stroke)!important; }
+        .plug-card-modern.plug-critical { border-left:1px solid var(--stroke)!important; }
+        .plug-card-modern .text-[8px] { font-size:9px; }
+        @media (max-width:1023px) {
+            .shell-update { display:none; }
+            .resource-cell { padding:22px 18px; }
+            .metric-number { font-size:36px; }
+            .quick-device-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        }
+        @media (max-width:767px) {
+            .app-topbar { height:126px; padding:14px 18px; flex-wrap:wrap; gap:10px; }
+            .app-topbar > .workspace-nav { order:3; width:100%; }
+            body .workspace-nav.q-btn-group .q-btn { flex:1; padding:0 8px; min-height:32px; }
+            .q-page-container { padding-top:126px!important; }
+            .dashboard-main { padding:24px 16px; gap:24px; }
+            .page-title { font-size:29px; }
+            .resource-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .resource-cell { min-height:218px; padding:20px 16px; border-bottom:1px solid var(--stroke); }
+            .resource-cell:nth-child(2) { border-right:0; }
+            .resource-cell:nth-child(n+3) { border-bottom:0; }
+            .resource-cell:nth-child(3) { border-right:1px solid var(--stroke); }
+            .metric-number { font-size:35px; }
+            .metric-caption, .metric-footnote { font-size:10px; }
+            .sensor-card { min-height:158px; }
+            body .fleet-overview { padding:16px!important; }
+            .quick-device-grid { gap:10px; }
+            .iot-plug-tile { padding:12px!important; }
+        }
         </style>
     ''')
 
@@ -645,77 +579,56 @@ def add_common_styles():
 #  RENDER SERVER CONTENT
 # ─────────────────────────────────────────────────────────────────────────────
 def render_server_content(on_nav_to_plugs=None):
-    with ui.column().classes('w-full gap-4 sm:gap-8'):
+    with ui.column().classes('w-full gap-4 sm:gap-6'):
 
-        with ui.row().classes('items-center gap-2 mb-2'):
-            ui.icon('analytics', color='primary')
-            ui.label('System Performance').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
-
-        with ui.grid().classes('w-full gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4'):
-
-            with ui.card().classes('glass-card p-5 flex flex-col items-center relative overflow-hidden'):
-                ui.label('CPU Load').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
-                ui.icon('speed', size='sm', color='primary').classes('absolute top-4 right-4 opacity-50')
-                with ui.circular_progress(min=0, max=100, show_value=True, size='110px', color='primary').props('thickness=0.1').classes('mt-4') as p:
-                    p.bind_value_from(system_stats, 'cpu_percent')
-                ui.label().bind_text_from(system_stats, 'cpu_temp', backward=lambda x: f'{x}°C').classes('text-2xl font-bold text-slate-900 dark:text-white mt-4')
-                ui.label('Core Temp').classes('text-xs text-slate-500')
-
-            with ui.card().classes('glass-card p-5 flex flex-col justify-between relative'):
-                ui.label('MEMORY').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest mb-4')
-                with ui.row().classes('items-end gap-2'):
-                    ui.label().bind_text_from(system_stats, 'memory_percent', backward=lambda x: f'{x:.1f}%').classes('text-4xl font-bold text-secondary')
-                    ui.label('Used').classes('text-sm text-slate-600 dark:text-slate-500 mb-2')
-                with ui.element('div').classes('relative w-full my-4 h-6 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden'):
-                    ui.linear_progress(show_value=False).bind_value_from(system_stats, 'memory_percent', backward=lambda x: x/100).classes('absolute inset-0 h-full bg-transparent').props('color=secondary track-color=transparent')
-                    ui.label().bind_text_from(system_stats, 'memory_used_gb', backward=lambda x: f'{x:.1f}GB').classes('absolute inset-0 flex items-center justify-center text-xs font-bold text-slate-800 dark:text-white z-10')
-                with ui.row().classes('justify-center w-full mt-2'):
-                    ui.label().bind_text_from(system_stats, 'memory_total_gb', backward=lambda x: f'/ {x} GB').classes('text-sm text-slate-500 dark:text-slate-400 font-semibold')
-
-            with ui.card().classes('glass-card p-5 flex flex-col justify-between relative'):
-                ui.label('NVME STORAGE').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest mb-4')
-                ui.label().bind_text_from(system_stats, 'nvme_temp', backward=lambda x: f'{x}°C').classes('absolute top-4 right-5 text-lg text-accent font-bold')
-                with ui.row().classes('items-end gap-2'):
-                    ui.label().bind_text_from(system_stats, 'nvme_percent', backward=lambda x: f'{x:.1f}%').classes('text-4xl font-bold text-accent')
-                with ui.element('div').classes('relative w-full my-4 h-6 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden'):
-                    ui.linear_progress(show_value=False).bind_value_from(system_stats, 'nvme_percent', backward=lambda x: x/100).classes('absolute inset-0 h-full bg-transparent').props('color=accent track-color=transparent')
-                    ui.label().bind_text_from(system_stats, 'nvme_used_gb', backward=lambda x: f'{x:.1f}GB').classes('absolute inset-0 flex items-center justify-center text-xs font-bold text-slate-800 dark:text-white z-10')
-                with ui.row().classes('justify-center w-full mt-2'):
-                    ui.label().bind_text_from(system_stats, 'nvme_total_gb', backward=lambda x: f'/ {x} GB').classes('text-sm text-slate-500 dark:text-slate-400 font-semibold')
-
-            with ui.card().classes('glass-card p-5 flex flex-col justify-between relative'):
-                ui.label('MASS STORAGE').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest mb-4')
-                ui.label().bind_text_from(system_stats, 'hdd_status', backward=lambda x: x.upper()).classes('absolute top-4 right-5 text-lg font-bold text-slate-400 dark:text-slate-300')
-                with ui.row().classes('items-end justify-between w-full'):
-                    ui.label().bind_text_from(system_stats, 'hdd_percent', backward=lambda x: f'{x:.1f}%').classes('text-4xl font-bold text-positive')
-                with ui.element('div').classes('relative w-full my-4 h-6 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden'):
-                    ui.linear_progress(show_value=False).bind_value_from(system_stats, 'hdd_percent', backward=lambda x: x/100).classes('absolute inset-0 h-full bg-transparent').props('color=positive track-color=transparent')
-                    ui.label().bind_text_from(system_stats, 'hdd_used_gb', backward=lambda x: f'{x:.1f}GB').classes('absolute inset-0 flex items-center justify-center text-xs font-bold text-slate-800 dark:text-white z-10')
-                with ui.row().classes('justify-center w-full mt-2'):
-                    ui.label().bind_text_from(system_stats, 'hdd_total_gb', backward=lambda x: f'/ {x} GB').classes('text-sm text-slate-500 dark:text-slate-400 font-semibold')
+        with ui.grid().classes('glass-card resource-grid w-full'):
+            for key, name, icon in [('cpu', 'Processor', 'memory'), ('memory', 'Memory', 'developer_board'), ('nvme', 'NVMe storage', 'storage'), ('hdd', 'Mass storage', 'dns')]:
+                with ui.column().classes(f'resource-cell resource-{key}'):
+                    with ui.row().classes('w-full items-center justify-between'):
+                        ui.label(name).classes('metric-heading')
+                        ui.icon(icon, size='18px').classes('metric-icon')
+                    if key == 'cpu':
+                        with ui.element('div').classes('cpu-dial'):
+                            ui.circular_progress(min=0, max=100, show_value=False, size='112px', color='primary').bind_value_from(system_stats, 'cpu_percent').props('thickness=0.09')
+                            ui.label().bind_text_from(system_stats, 'cpu_percent', backward=lambda x: f'{x:.1f}%').classes('dial-value')
+                        ui.label().bind_text_from(system_stats, 'cpu_temp', backward=lambda x: f'Core temperature  ·  {x:.1f}°C').classes('metric-caption')
+                    else:
+                        with ui.column().classes('gap-1 metric-reading'):
+                            ui.label().bind_text_from(system_stats, f'{key}_percent', backward=lambda x: f'{x:.1f}%').classes('metric-number')
+                            ui.label('Capacity used').classes('metric-caption')
+                        ui.linear_progress(show_value=False).bind_value_from(system_stats, f'{key}_percent', backward=lambda x: x/100).props('color=primary').classes('metric-bar')
+                        with ui.row().classes('w-full justify-between items-center gap-1'):
+                            ui.label().bind_text_from(system_stats, f'{key}_used_gb', backward=lambda x: f'{x:.1f} GB').classes('metric-caption')
+                            ui.label().bind_text_from(system_stats, f'{key}_total_gb', backward=lambda x: f'of {x:g} GB').classes('metric-caption')
+                        if key == 'nvme':
+                            ui.label().bind_text_from(system_stats, 'nvme_temp', backward=lambda x: f'Drive temperature  ·  {x:.1f}°C').classes('metric-footnote')
+                        elif key == 'hdd':
+                            ui.label().bind_text_from(system_stats, 'hdd_status', backward=lambda x: f'Drive state  ·  {x.title()}').classes('metric-footnote')
+                        else:
+                            ui.label('System memory').classes('metric-footnote')
 
         # ── IoT Environment & Smart Plug Fleet ──────────────────────────────
-        with ui.row().classes('items-center justify-between mt-8 mb-3 w-full flex-wrap gap-2'):
+        with ui.row().classes('items-center justify-between mt-2 mb-1 w-full flex-wrap gap-2'):
             with ui.row().classes('items-center gap-2'):
                 ui.icon('sensors', color='secondary').classes('text-xl')
-                ui.label('IoT Environment & Smart Plugs').classes('text-lg font-bold text-slate-800 dark:text-gray-200')
+                ui.label('Environment').classes('text-lg font-bold text-slate-800 dark:text-gray-200')
             if on_nav_to_plugs:
                 ui.button('Manage Plugs Fleet →', on_click=on_nav_to_plugs, icon='electrical_services').props('flat rounded dense').classes('text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 px-3 py-1')
 
         # 1. Environmental Sensor Cards (ESP32 Multi-room)
-        iot_container = ui.row().classes('w-full gap-4 sm:gap-6 grid grid-cols-1 md:grid-cols-3 items-stretch mb-4')
+        iot_container = ui.row().classes('sensor-grid w-full gap-4 grid grid-cols-1 md:grid-cols-3 items-stretch')
 
         # 2. Smart Plug Fleet Quick-Control Hub
-        with ui.card().classes('glass-card w-full p-4 sm:p-5 relative overflow-hidden'):
+        with ui.card().classes('glass-card fleet-overview w-full p-4 sm:p-5 relative overflow-hidden'):
             with ui.row().classes('w-full items-center justify-between mb-3 flex-wrap gap-2'):
                 with ui.row().classes('items-center gap-2'):
                     ui.icon('power', color='positive').classes('text-lg')
-                    ui.label('Smart Plug Fleet Status').classes('text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide')
+                    ui.label('Connected devices').classes('text-sm font-semibold text-slate-700 dark:text-slate-300')
                 with ui.row().classes('items-center gap-3 text-xs font-semibold'):
-                    server_fleet_watts_label = ui.label('⚡ 0.0 W load').classes('text-amber-500 font-bold')
-                    server_fleet_active_label = ui.label('🟢 0/8 Active').classes('text-emerald-500 font-bold')
+                    server_fleet_watts_label = ui.label('0.0 W total').classes('text-amber-500 font-bold')
+                    server_fleet_active_label = ui.label('0/8 powered on').classes('text-emerald-500 font-bold')
 
-            iot_plugs_grid = ui.grid().classes('w-full gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4')
+            iot_plugs_grid = ui.grid().classes('quick-device-grid w-full')
 
         def update_iot_display():
             iot_container.clear()
@@ -723,7 +636,7 @@ def render_server_content(on_nav_to_plugs=None):
                 if iot_devices:
                     for device_id, data in iot_devices.items():
                         with ui.card().classes(
-                            'glass-card p-4 hover:scale-[1.02] '
+                            'glass-card sensor-card p-4 '
                             'transition-transform h-full flex flex-col justify-between'):
                             with ui.row().classes('items-center justify-between w-full mb-2'):
                                 with ui.row().classes('items-center gap-2'):
@@ -734,23 +647,17 @@ def render_server_content(on_nav_to_plugs=None):
                                         ui.label(data.get('zone', 'Homelab')).classes(
                                             'text-[10px] text-slate-400')
                                 ui.badge(data.get('status', 'Optimal'), color='positive').props('dense rounded').classes('text-[9px] font-semibold')
-                            ui.separator().classes('bg-slate-300/40 dark:bg-slate-700/40 mb-3')
-                            with ui.row().classes('justify-around items-center gap-4 mt-auto'):
-                                with ui.column().classes('items-center gap-0'):
-                                    ui.icon('thermostat', size='xs', color='orange')
-                                    ui.label(f"{data.get('temperature', 0)}°C").classes(
-                                        'text-lg font-bold text-slate-800 dark:text-white')
-                                    ui.label('TEMP').classes('text-[9px] text-slate-400 font-bold')
-                                with ui.column().classes('items-center gap-0'):
-                                    ui.icon('water_drop', size='xs', color='blue')
-                                    ui.label(f"{data.get('humidity', 0)}%").classes(
-                                        'text-lg font-bold text-slate-800 dark:text-white')
-                                    ui.label('HUMIDITY').classes('text-[9px] text-slate-400 font-bold')
-                                with ui.column().classes('items-center gap-0'):
-                                    ui.icon('signal_cellular_alt', size='xs', color='positive')
-                                    ui.label(f"{data.get('rssi', -60)}").classes(
-                                        'text-lg font-bold text-slate-800 dark:text-white')
-                                    ui.label('RSSI dBm').classes('text-[9px] text-slate-400 font-bold')
+                            with ui.row().classes('room-readings w-full justify-between items-end'):
+                                with ui.column().classes('gap-1'):
+                                    ui.label(f"{data.get('temperature', 0):.1f}°").classes('room-temperature')
+                                    ui.label('TEMPERATURE · °C').classes('room-caption')
+                                with ui.column().classes('room-secondary gap-2'):
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.icon('water_drop', size='15px')
+                                        ui.label(f"{data.get('humidity', 0):.1f}%").classes('room-detail')
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.icon('wifi', size='15px')
+                                        ui.label(f"{data.get('rssi', -60)} dBm").classes('room-detail')
 
             # Populate smart plug quick-tiles
             iot_plugs_grid.clear()
@@ -767,16 +674,16 @@ def render_server_content(on_nav_to_plugs=None):
                         total_w += watts
 
                     is_crit = cfg.get("is_critical", False)
-                    tile_cls = f"iot-plug-tile {'tile-on' if is_on else ''} {'tile-critical' if is_crit else ''} aspect-square flex flex-col justify-between p-4"
+                    tile_cls = f"iot-plug-tile {'tile-on' if is_on else ''} {'tile-critical' if is_crit else ''} min-h-[105px] flex flex-col justify-between p-4"
                     with ui.card().classes(tile_cls):
                         with ui.row().classes('items-start justify-between w-full'):
                             with ui.column().classes('gap-1'):
-                                ui.icon(cfg.get('icon', 'power'), size='sm').classes(
+                                ui.icon(cfg.get('icon', 'power'), size='20px').classes(
                                     'text-emerald-500' if is_on else 'text-slate-400'
                                 )
                                 with ui.column().classes('gap-0 mt-1'):
                                     ui.label(cfg["name"]).classes(
-                                        'text-sm font-bold text-slate-800 dark:text-slate-200 leading-tight'
+                                        'text-sm font-semibold text-slate-800 dark:text-slate-200 leading-tight'
                                     )
                                     ui.label(cfg.get("zone", "Lab")).classes(
                                         'text-[10px] text-slate-400'
@@ -786,7 +693,7 @@ def render_server_content(on_nav_to_plugs=None):
 
                         with ui.row().classes('items-end justify-between w-full mt-auto'):
                             ui.label(f"{watts:.1f} W" if is_on else "OFF").classes(
-                                f"text-xs font-bold uppercase tracking-wider {'text-emerald-500 dark:text-emerald-400' if is_on else 'text-slate-400'}"
+                                f"text-xs font-bold uppercase tracking-wider {'text-teal-600 dark:text-teal-300' if is_on else 'text-slate-400'}"
                             )
 
                             def make_toggle_handler(dk=dev_key, crit=is_crit):
@@ -811,17 +718,17 @@ def render_server_content(on_nav_to_plugs=None):
                                 f"text-[11px] font-bold px-3 py-1 transition-colors {'bg-emerald-500 text-white hover:bg-emerald-600' if is_on else 'bg-blue-500 text-white hover:bg-blue-600'}"
                             )
 
-            server_fleet_watts_label.set_text(f"⚡ {total_w:.1f} W load")
-            server_fleet_active_label.set_text(f"🟢 {active_cnt}/{len(MOCK_DEVICES)} Active")
+            server_fleet_watts_label.set_text(f"{total_w:.1f} W total")
+            server_fleet_active_label.set_text(f"{active_cnt}/{len(MOCK_DEVICES)} powered on")
 
         ui.timer(3.0, update_iot_display)
 
         with ui.card().classes(
-            'glass-card w-full p-4 sm:p-6 mt-2 sm:mt-4 bg-slate-200/50 dark:bg-slate-800/50 '
+            'glass-card analysis-panel w-full p-4 '
             'border-l-4 border-slate-300 dark:border-white'):
             with ui.row().classes('items-start gap-4'):
                 with ui.column().classes('w-full'):
-                    ui.label('DeepMind Analysis').classes(
+                    ui.label('DeepMind analysis').classes(
                         'text-slate-900 dark:text-white text-sm font-bold uppercase tracking-widest mb-1')
                     ui.label().bind_text_from(globals(), 'ai_insights').classes(
                         'text-slate-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed')
@@ -838,25 +745,25 @@ def render_energy_content():
         with ui.grid().classes('w-full gap-4 sm:gap-6 grid-cols-1 md:grid-cols-3 items-stretch'):
 
             # 1. Live Power
-            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center relative overflow-hidden'):
+            with ui.card().classes('glass-card energy-summary p-5 flex flex-col items-start justify-center relative overflow-hidden'):
                 ui.label('LIVE POWER').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
                 ui.icon('bolt', size='sm', color='warning').classes('absolute top-4 right-4 opacity-30')
-                live_power_label = ui.label('0.0').classes('text-5xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-yellow-400 to-orange-500 mt-6 drop-shadow-[0_0_15px_rgba(245,158,11,0.4)] transition-all duration-300')
+                live_power_label = ui.label('0.0').classes('energy-number text-4xl font-semibold mt-6')
                 ui.label('Watts (W)').classes('text-xs text-slate-500 mt-2 uppercase tracking-widest font-semibold')
-                
+
             # 2. Today's Total Energy
-            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center relative overflow-hidden'):
+            with ui.card().classes('glass-card energy-summary p-5 flex flex-col items-start justify-center relative overflow-hidden'):
                 ui.label("TODAY'S ENERGY").classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
                 ui.icon('eco', size='sm', color='positive').classes('absolute top-4 right-4 opacity-30')
-                total_kwh_label = ui.label('0.000').classes('text-5xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-green-400 to-emerald-500 mt-6 drop-shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all duration-300')
+                total_kwh_label = ui.label('0.000').classes('energy-number text-4xl font-semibold mt-6')
                 ui.label('kWh').classes('text-xs text-slate-500 mt-2 uppercase tracking-widest font-semibold')
 
             # 3. Total Cost
-            with ui.card().classes('glass-card p-6 flex flex-col items-center justify-center relative overflow-hidden'):
+            with ui.card().classes('glass-card energy-summary p-5 flex flex-col items-start justify-center relative overflow-hidden'):
                 ui.label("TOTAL COST").classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
                 ui.icon('payments', size='sm', color='primary').classes('absolute top-4 right-4 opacity-30')
-                cost_label = ui.label('0.00').classes('text-5xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-blue-400 to-indigo-500 mt-6 drop-shadow-[0_0_15px_rgba(59,130,246,0.4)] transition-all duration-300')
-                ui.label('RM').classes('text-xs text-slate-500 mt-2 uppercase tracking-widest font-semibold')
+                cost_label = ui.label('0.00').classes('energy-number text-4xl font-semibold mt-6')
+                ui.label('RM · Domestic General estimate').classes('text-xs text-slate-500 mt-2 uppercase tracking-widest font-semibold')
 
         with ui.row().classes('w-full gap-4 sm:gap-6 items-stretch flex-col lg:flex-row'):
 
@@ -906,7 +813,7 @@ def render_energy_content():
                     with ui.column().classes('gap-0'):
                         chart_title = ui.label('Power Usage — Live').classes('text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest')
                         chart_cost = ui.label('').classes('text-[10px] font-bold text-emerald-500 hidden')
-                    
+
                     def on_filter_change(e):
                         chart_filter['value'] = e.value
                         chart_title.set_text(f'Power Usage — {e.value}')
@@ -914,7 +821,7 @@ def render_energy_content():
                             chart_cost.classes(add='hidden')
                         else:
                             chart_cost.classes(remove='hidden')
-                        
+
                     ui.toggle(['Live', 'Day', 'Week', 'Month'], value='Live', on_change=on_filter_change).props('unelevated size=sm').classes('bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400')
 
                 area_chart = ui.echart({
@@ -928,17 +835,17 @@ def render_energy_content():
                     'grid':    {'left': '3%', 'right': '4%', 'bottom': '3%', 'containLabel': True},
                     'xAxis':   [{'type': 'category', 'boundaryGap': False, 'data': [],
                                  'axisLabel': {'color': '#94a3b8', 'rotate': 45},
-                                 'splitLine': {'show': True, 'lineStyle': {'color': 'rgba(255,255,255,0.05)'}} }],
+                                 'splitLine': {'show': True, 'lineStyle': {'color': 'rgba(148,163,184,0.16)'}} }],
                     'yAxis':   [{'type': 'value', 'name': 'Watts',
                                  'nameTextStyle': {'color': '#94a3b8'},
                                  'axisLabel': {'color': '#94a3b8'},
-                                 'splitLine': {'show': True, 'lineStyle': {'color': 'rgba(255,255,255,0.05)'}} }],
-                    'series':  [{'name': 'Power (W)', 'type': 'line', 'smooth': True,
+                                 'splitLine': {'show': True, 'lineStyle': {'color': 'rgba(148,163,184,0.16)'}} }],
+                    'series':  [{'name': 'Power (W)', 'type': 'line', 'smooth': False,
                                  'lineStyle': {
                                       'color': '#8b5cf6',
                                       'width': 3,
                                       'shadowColor': 'rgba(139, 92, 246, 0.5)',
-                                      'shadowBlur': 10
+                                      'shadowBlur': 8
                                  },
                                  'areaStyle': {'color': {
                                       'type': 'linear', 'x': 0, 'y': 0, 'x2': 0, 'y2': 1,
@@ -1009,7 +916,7 @@ def render_energy_content():
                 from datetime import datetime, timedelta
                 n_points = 24 if chart_filter['value'] == 'Day' else 7 if chart_filter['value'] == 'Week' else 30
                 now = datetime.now()
-                
+
                 if chart_filter['value'] == 'Day':
                     labels = [(now - timedelta(hours=i)).strftime("%H:00") for i in range(n_points)][::-1]
                     values = [round(random.uniform(0.5, 3.5), 2) for _ in range(n_points)]
@@ -1020,9 +927,9 @@ def render_energy_content():
                     values = [round(random.uniform(10.0, 30.0), 2) for _ in range(n_points)]
                     area_chart.options['yAxis'][0]['name'] = 'Energy (kWh)'
                     area_chart.options['series'][0]['name'] = 'Energy (kWh)'
-                    
+
                 total_kwh = sum(values)
-                chart_cost.set_text(f"EST. COST: RM {total_kwh * 0.218:.2f}")
+                chart_cost.set_text(f"EST. COST: RM {mock_calculate_tnb_cost(total_kwh):.2f}")
             else:
                 area_chart.options['yAxis'][0]['name'] = 'Watts'
                 area_chart.options['series'][0]['name'] = 'Power (W)'
@@ -1063,16 +970,16 @@ def _plug_chart_options(dev_key: str) -> dict:
             "name": "Watts",
             "nameTextStyle": {"color": "#94a3b8", "fontSize": 10},
             "axisLabel": {"color": "#94a3b8", "fontSize": 10},
-            "splitLine": {"lineStyle": {"color": "rgba(255,255,255,0.05)", "type": "dashed"}},
+            "splitLine": {"lineStyle": {"color": "rgba(148,163,184,0.16)", "type": "dashed"}},
         },
         "series": [{
-            "data": values, "type": "line", "smooth": True, "symbol": "none",
-            "lineStyle": {"color": "#10B981", "width": 2.5},
+            "data": values, "type": "line", "smooth": False, "symbol": "none",
+            "lineStyle": {"color": "#00a884", "width": 3, "shadowColor": "rgba(0,168,132,0.3)", "shadowBlur": 6},
             "areaStyle": {"color": {
                 "type": "linear", "x": 0, "y": 0, "x2": 0, "y2": 1,
                 "colorStops": [
-                    {"offset": 0, "color": "rgba(16, 185, 129, 0.35)"},
-                    {"offset": 1, "color": "rgba(16, 185, 129, 0.01)"},
+                    {"offset": 0, "color": "rgba(0, 168, 132, 0.4)"},
+                    {"offset": 1, "color": "rgba(0, 168, 132, 0.02)"},
                 ],
             }},
         }],
@@ -1232,7 +1139,7 @@ def render_plugs_content():
                     with ui.row().classes('items-baseline gap-2 mt-1'):
                         fleet_today_kwh_label = ui.label('0.00 kWh').classes('text-xl sm:text-2xl font-black text-blue-500')
                         fleet_today_cost_label = ui.label('RM 0.00').classes('text-xs font-bold text-slate-600 dark:text-slate-300')
-                    ui.label('TNB Tariff Rate calculation').classes('text-[10px] text-slate-400')
+                    ui.label('Domestic General · monitored estimate').classes('text-[10px] text-slate-400')
 
                 # 4. Top Consumer
                 with ui.column().classes('p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/60'):
@@ -1295,7 +1202,7 @@ def render_plugs_content():
                         with ui.row().classes('items-center justify-between w-full mb-3'):
                             with ui.row().classes('items-center gap-2.5 overflow-hidden'):
                                 with ui.element('div').classes('p-2 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center'):
-                                    icon_el = ui.icon(cfg.get('icon', 'power'), size='sm').classes('text-primary')
+                                    icon_el = ui.icon(cfg.get('icon', 'power'), size='20px').classes('text-primary')
                                 with ui.column().classes('gap-0 overflow-hidden'):
                                     ui.label(cfg["name"]).classes('text-sm font-bold text-slate-800 dark:text-white truncate')
                                     with ui.row().classes('items-center gap-1.5'):
@@ -1521,7 +1428,7 @@ def render_network_content():
                     with ui.row().classes('w-full justify-between items-center mb-2'):
                         ui.label('Live Latency (ms)').classes('font-semibold text-slate-700 dark:text-gray-300')
                         ui.icon('timeline', color='gray-400')
-                    
+
                     chart = ui.echart({
                         'tooltip': {'trigger': 'axis'},
                         'legend': {'data': list(network_state["targets"].keys()), 'textStyle': {'color': '#94a3b8'}, 'bottom': 0},
@@ -1529,10 +1436,10 @@ def render_network_content():
                         'xAxis': {'type': 'category', 'boundaryGap': False, 'show': False, 'data': list(range(60))},
                         'yAxis': {'type': 'value', 'splitLine': {'lineStyle': {'color': '#334155'}}},
                         'series': [
-                            {'name': target, 'type': 'line', 'smooth': True, 'showSymbol': False, 'data': list(data["history"])}
+                            {'name': target, 'type': 'line', 'smooth': False, 'showSymbol': False, 'lineStyle': {'width': 3}, 'data': list(data["history"])}
                             for target, data in network_state["targets"].items()
                         ],
-                        'color': ['#3b82f6', '#10b981', '#f59e0b']
+                        'color': ['#3b82f6', '#a855f7', '#f97316']
                     }).classes('w-full h-64')
 
                 # Targets Status Grid
@@ -1577,20 +1484,20 @@ def render_network_content():
     # ── Live update timer ────────────────────────────────────────────────
     def _refresh_network():
         update_network_mock_data()
-        
+
         health = network_state["health"]
         health_badge.set_text(health)
         health_badge.props(f'color={"positive" if health == "GOOD" else "warning" if health == "WARNING" else "negative"}')
-        
+
         for i, (target, data) in enumerate(network_state["targets"].items()):
             chart.options['series'][i]['data'] = list(data["history"])
         chart.update()
-        
+
         for target, elements in target_cards.items():
             data = network_state["targets"][target]
             elements['lat'].set_text(f"{data['latency']:.1f} ms")
             elements['loss'].set_text(f"{data['packet_loss']:.1f}% loss")
-            
+
             if data['packet_loss'] > 0:
                 elements['loss'].classes(replace='text-xs text-negative font-semibold mt-1 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded animate-pulse')
                 elements['card'].classes(add='border-2 border-red-500/50')
@@ -1599,7 +1506,7 @@ def render_network_content():
                 elements['card'].classes(remove='border-2 border-red-500/50')
 
         ai_label.set_text(network_state["ai_insights"])
-        
+
         log_container.clear()
         for log in network_state["route_log"]:
             with log_container:
@@ -1615,28 +1522,32 @@ def index_page():
     dark_mode = ui.dark_mode()
     dark_mode.enable()
     add_common_styles()
-    ui.colors(primary='#3b82f6', secondary='#8b5cf6', accent='#ec4899',
-              positive='#10b981', warning='#f59e0b')
+    ui.colors(primary='#226dbe', secondary='#6557b8', accent='#a66328',
+              positive='#16805e', warning='#b77915')
 
-    with ui.header().classes('glass-header items-center justify-between p-3 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
-        with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto sm:flex-1 justify-center sm:justify-start relative'):
-            ui.icon('dns', size='md', color='primary').classes('drop-shadow-md')
-            ui.label('HOMELAB').classes('text-2xl font-bold tracking-tight text-slate-900 dark:text-white')
-            # Mobile-only dark mode button placed on the right edge
-            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('lt-sm absolute right-2 text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
-        
-        with ui.row().classes('items-center justify-center z-10 w-full sm:w-auto sm:flex-1 mt-3 sm:mt-0'):
-            toggle = ui.toggle(
-                ['Server', 'Energy', 'Plugs', 'Network'], value='Server'
-            ).props('unelevated rounded').classes('q-btn-group').style('border-radius: 20px; font-weight: 600;')
+    with ui.header().classes('app-topbar items-center justify-between'):
+        with ui.row().classes('items-center gap-3'):
+            with ui.element('div').classes('brand-symbol'):
+                ui.icon('dns', size='21px')
+            with ui.column().classes('gap-0'):
+                ui.label('homelab').classes('brand-name')
+                ui.label('CONTROL CENTER').classes('brand-caption')
+        toggle = ui.toggle(['Server', 'Energy', 'Plugs', 'Network'], value='Server').props('unelevated no-caps').classes('workspace-nav')
+        with ui.row().classes('items-center gap-3'):
+            ui.label().bind_text_from(globals(), 'last_update', backward=lambda x: f'Updated {x}' if x else 'Collecting data').classes('shell-update')
+            ui.button(icon='dark_mode', on_click=dark_mode.toggle).props('flat round aria-label="Toggle theme"').classes('theme-button').bind_icon_from(dark_mode, 'value', backward=lambda x: 'light_mode' if x else 'dark_mode')
 
-        with ui.row().classes('items-center justify-end gap-4 z-10 gt-xs sm:flex-1'):
-            with ui.row().classes('items-center gap-2 bg-slate-200 dark:bg-slate-800 rounded-full px-3 py-1 gt-sm'):
-                ui.icon('schedule', size='xs', color='gray-400')
-                ui.label().bind_text_from(globals(), 'last_update').classes('text-sm text-slate-600 dark:text-gray-300 font-mono')
-            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes('text-slate-900 dark:text-white').bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
-
-    with ui.column().classes('w-full max-w-7xl mx-auto px-4 sm:px-6 pt-0 pb-4 sm:pb-6 mt-0 gap-4 sm:gap-8'):
+    headings = {
+        'Server': ('Server overview', 'System resources, room conditions and connected devices.'),
+        'Energy': ('Energy monitor', 'Power consumption, daily usage and cost estimates.'),
+        'Plugs': ('Device fleet', 'Monitor and control your connected smart plugs.'),
+        'Network': ('Network monitor', 'Latency, packet loss and route diagnostics.'),
+    }
+    with ui.column().classes('dashboard-main'):
+        with ui.column().classes('page-heading gap-1'):
+            ui.label('YOUR HOMELAB').bind_text_from(toggle, 'value', backward=lambda x: f'HOMELAB / {x.upper()}').classes('page-eyebrow')
+            ui.label().bind_text_from(toggle, 'value', backward=lambda x: headings[x][0]).classes('page-title')
+            ui.label().bind_text_from(toggle, 'value', backward=lambda x: headings[x][1]).classes('page-description')
         with ui.tab_panels(toggle, value='Server').classes('w-full bg-transparent p-0'):
             with ui.tab_panel('Server').classes('p-0'):
                 render_server_content(on_nav_to_plugs=lambda: toggle.set_value('Plugs'))

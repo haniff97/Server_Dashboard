@@ -73,26 +73,32 @@ def insert_state_change(device_id: str, device_name: str,
 
 # ── Aggregation ────────────────────────────────────────────────────────────
 
-def calculate_tnb_cost(kwh: float) -> float:
-    """
-    TNB Tariff A residential tiered cost in RM.
-    Tiers: 0-200 @ RM0.218 | 201-300 @ RM0.334 | 301-600 @ RM0.516 | 601+ @ RM0.546
-    """
-    tiers = [
-        (200, 0.218),
-        (100, 0.334),
-        (300, 0.516),
-        (float("inf"), 0.546),
-    ]
-    cost = 0.0
-    remaining = kwh
-    for limit, rate in tiers:
-        if remaining <= 0:
-            break
-        usage = min(remaining, limit)
-        cost += usage * rate
-        remaining -= usage
-    return round(cost, 4)
+from services.tnb_tariff import calculate_tnb_cost, allocate_tnb_cost
+
+
+def estimate_usage_cost(kwh, year_month=None):
+    """Use all monitored loads in the same calendar month as the tariff basis."""
+    month = year_month or date.today().strftime('%Y-%m')
+    with get_conn() as conn:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT COALESCE(SUM(wh_delta), 0) / 1000 AS total_kwh
+            FROM plug_energy
+            WHERE polled_at >= %s AND polled_at < DATE_ADD(%s, INTERVAL 1 MONTH)
+        """, (month + '-01', month + '-01'))
+        row = cursor.fetchone()
+        cursor.close()
+    monthly = max(float(row['total_kwh'] or 0), float(kwh))
+    return allocate_tnb_cost(kwh, monthly, year_month=month)
+
+
+def estimate_history_cost(points):
+    """Group chart consumption by its actual month before allocating cost."""
+    monthly = {}
+    for point in points:
+        month = str(point.get('date_str') or point.get('hour_str'))[:7]
+        monthly[month] = monthly.get(month, 0.0) + float(point.get('kwh') or 0)
+    return sum(estimate_usage_cost(kwh, month) for month, kwh in monthly.items())
 
 
 def aggregate_daily(device_id: str, date_str: str = None) -> None:
@@ -126,7 +132,7 @@ def aggregate_daily(device_id: str, date_str: str = None) -> None:
 
         total_wh  = float(row["total_wh"] or 0)
         total_kwh = total_wh / 1000.0
-        cost_rm   = calculate_tnb_cost(total_kwh)
+        cost_rm   = estimate_usage_cost(total_kwh, date_str[:7])
 
         cursor.execute("""
             INSERT INTO plug_daily_summary
@@ -175,7 +181,7 @@ def aggregate_monthly(device_id: str, year_month: str = None) -> None:
             return
 
         total_kwh = float(row["total_kwh"] or 0)
-        cost_rm   = calculate_tnb_cost(total_kwh)
+        cost_rm   = estimate_usage_cost(total_kwh, year_month)
 
         cursor.execute("""
             INSERT INTO plug_monthly_summary
@@ -208,7 +214,7 @@ def get_today_summary(device_id: str) -> dict:
     return {
         "total_wh":  round(total_wh, 4),
         "total_kwh": round(total_kwh, 6),
-        "cost_rm":   calculate_tnb_cost(total_kwh),
+        "cost_rm":   estimate_usage_cost(total_kwh),
     }
 
 
@@ -241,6 +247,9 @@ def get_monthly_history(device_id: str, months: int = 6) -> list:
         """, (device_id, months))
         rows = cursor.fetchall()
         cursor.close()
+    # Stored cost allocations can become stale as other devices consume energy.
+    for row in rows:
+        row['cost_rm'] = estimate_usage_cost(float(row['total_kwh']), row['year_month'])
     return list(reversed(rows))
 
 

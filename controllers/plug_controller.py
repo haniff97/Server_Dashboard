@@ -89,16 +89,33 @@ def energy_cache_loop():
 
 
 # ── Commands (async — call from UI event handlers) ─────────────────────────────
-async def toggle_plug(dev_key: str, target_state: bool) -> bool:
-    """Turn plug on/off and log to DB. Returns True on success."""
-    ok = await run.io_bound(tuya_local.set_switch, dev_key, target_state)
-    if ok:
+_state_log_tasks: set[asyncio.Task] = set()
+
+
+async def _log_switch_change(dev_key: str, target_state: bool) -> None:
+    try:
         await run.io_bound(
             db.insert_state_change,
             tuya_local.DEVICES[dev_key]["id"],
             tuya_local.DEVICES[dev_key]["name"],
             target_state,
         )
+    except Exception as exc:
+        # A logging failure must not turn a successful physical command into failure.
+        print(f"[db] switch log failed ({dev_key}): {exc}")
+
+
+async def toggle_plug(dev_key: str, target_state: bool) -> bool:
+    """Return after device acknowledgement; persist the event independently."""
+    ok = await run.io_bound(tuya_local.set_switch, dev_key, target_state)
+    if ok:
+        with state.plug_lock:
+            cached = state.plug_state.get(dev_key, {}).get("status")
+            if cached is not None:
+                cached["switch"] = target_state
+        task = asyncio.create_task(_log_switch_change(dev_key, target_state))
+        _state_log_tasks.add(task)
+        task.add_done_callback(_state_log_tasks.discard)
     return ok
 
 

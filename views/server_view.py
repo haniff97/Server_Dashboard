@@ -18,114 +18,115 @@ plug_state   = state.plug_state
 plug_lock    = state.plug_lock
 
 def render_server_content(on_nav_to_plugs=None):
-    with ui.column().classes('w-full gap-4 sm:gap-8'):
+    with ui.column().classes('w-full gap-4 sm:gap-6'):
 
-        # ── 1. System Performance Header & Cards ──────────────────────────────
-        with ui.row().classes('items-center gap-2 mb-2'):
-            ui.icon('analytics', color='primary')
-            ui.label('System Performance').classes('text-lg font-semibold text-slate-800 dark:text-gray-200')
+        # ── 1. System Resource Grid ────────────────────────────────────────────
+        with ui.grid().classes('glass-card resource-grid w-full'):
+            for key, name, icon in [
+                ('cpu',    'Processor',    'memory'),
+                ('memory', 'Memory',       'developer_board'),
+                ('nvme',   'NVMe storage', 'storage'),
+                ('hdd',    'Mass storage', 'dns'),
+            ]:
+                extra_cls = 'resource-cpu' if key == 'cpu' else ''
+                with ui.column().classes(f'resource-cell {extra_cls}'):
+                    with ui.row().classes('w-full items-center justify-between'):
+                        ui.label(name).classes('metric-heading')
+                        ui.icon(icon, size='18px').classes('metric-icon')
 
-        with ui.grid().classes('w-full gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4'):
+                    if key == 'cpu':
+                        with ui.element('div').classes('cpu-dial'):
+                            ui.circular_progress(
+                                min=0, max=100, show_value=False, size='112px', color='primary'
+                            ).bind_value_from(system_stats, 'cpu_percent').props('thickness=0.09')
+                            ui.label().bind_text_from(
+                                system_stats, 'cpu_percent', backward=lambda x: f'{x:.1f}%'
+                            ).classes('dial-value')
+                        ui.label().bind_text_from(
+                            system_stats, 'cpu_temp',
+                            backward=lambda x: f'Core temperature  ·  {x:.1f}°C'
+                        ).classes('metric-caption')
+                    else:
+                        with ui.column().classes('gap-1 metric-reading'):
+                            ui.label().bind_text_from(
+                                system_stats, f'{key}_percent',
+                                backward=lambda x: f'{x:.1f}%'
+                            ).classes('metric-number')
+                            ui.label('Capacity used').classes('metric-caption')
+                        ui.linear_progress(show_value=False).bind_value_from(
+                            system_stats, f'{key}_percent', backward=lambda x: x / 100
+                        ).props('color=primary').classes('metric-bar')
+                        with ui.row().classes('w-full justify-between items-center gap-1'):
+                            ui.label().bind_text_from(
+                                system_stats, f'{key}_used_gb', backward=lambda x: f'{x:.1f} GB'
+                            ).classes('metric-caption')
+                            ui.label().bind_text_from(
+                                system_stats, f'{key}_total_gb', backward=lambda x: f'of {x:g} GB'
+                            ).classes('metric-caption')
+                        if key == 'nvme':
+                            ui.label().bind_text_from(
+                                system_stats, 'nvme_temp',
+                                backward=lambda x: f'Drive temperature  ·  {x:.1f}°C'
+                            ).classes('metric-footnote')
+                        elif key == 'hdd':
+                            ui.label().bind_text_from(
+                                system_stats, 'hdd_status',
+                                backward=lambda x: f'Drive state  ·  {x.title()}'
+                            ).classes('metric-footnote')
+                        else:
+                            ui.label('System memory').classes('metric-footnote')
 
-            # CPU Card
-            with ui.card().classes('glass-card p-5 flex flex-col items-center relative overflow-hidden'):
-                ui.label('CPU Load').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest absolute top-4 left-4')
-                ui.icon('speed', size='sm', color='primary').classes('absolute top-4 right-4 opacity-50')
-                with ui.circular_progress(min=0, max=100, show_value=True, size='110px', color='primary').props('thickness=0.1').classes('mt-4') as p:
-                    p.bind_value_from(system_stats, 'cpu_percent')
-                ui.label().bind_text_from(system_stats, 'cpu_temp', backward=lambda x: f'{x}°C').classes('text-2xl font-bold text-slate-900 dark:text-white mt-4')
-                ui.label('Core Temp').classes('text-xs text-slate-500')
-
-            # Memory Card
-            with ui.card().classes('glass-card p-5 flex flex-col justify-between relative'):
-                ui.label('MEMORY').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest mb-4')
-                with ui.row().classes('items-end gap-2'):
-                    ui.label().bind_text_from(system_stats, 'memory_percent', backward=lambda x: f'{x:.1f}%').classes('text-4xl font-bold text-secondary')
-                    ui.label('Used').classes('text-sm text-slate-600 dark:text-slate-500 mb-2')
-                with ui.element('div').classes('relative w-full my-4 h-6 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden'):
-                    ui.linear_progress(show_value=False).bind_value_from(system_stats, 'memory_percent', backward=lambda x: x/100).classes('absolute inset-0 h-full bg-transparent').props('color=secondary track-color=transparent')
-                    ui.label().bind_text_from(system_stats, 'memory_used_gb', backward=lambda x: f'{x:.1f}GB').classes('absolute inset-0 flex items-center justify-center text-xs font-bold text-slate-800 dark:text-white z-10')
-                with ui.row().classes('justify-center w-full mt-2'):
-                    ui.label().bind_text_from(system_stats, 'memory_total_gb', backward=lambda x: f'/ {x} GB').classes('text-sm text-slate-500 dark:text-slate-400 font-semibold')
-
-            # NVMe Storage Card
-            with ui.card().classes('glass-card p-5 flex flex-col justify-between relative'):
-                ui.label('NVME STORAGE').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest mb-4')
-                ui.label().bind_text_from(system_stats, 'nvme_temp', backward=lambda x: f'{x}°C').classes('absolute top-4 right-5 text-lg text-accent font-bold')
-                with ui.row().classes('items-end gap-2'):
-                    ui.label().bind_text_from(system_stats, 'nvme_percent', backward=lambda x: f'{x:.1f}%').classes('text-4xl font-bold text-accent')
-                with ui.element('div').classes('relative w-full my-4 h-6 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden'):
-                    ui.linear_progress(show_value=False).bind_value_from(system_stats, 'nvme_percent', backward=lambda x: x/100).classes('absolute inset-0 h-full bg-transparent').props('color=accent track-color=transparent')
-                    ui.label().bind_text_from(system_stats, 'nvme_used_gb', backward=lambda x: f'{x:.1f}GB').classes('absolute inset-0 flex items-center justify-center text-xs font-bold text-slate-800 dark:text-white z-10')
-                with ui.row().classes('justify-center w-full mt-2'):
-                    ui.label().bind_text_from(system_stats, 'nvme_total_gb', backward=lambda x: f'/ {x} GB').classes('text-sm text-slate-500 dark:text-slate-400 font-semibold')
-
-            # Mass Storage Card (HDD)
-            with ui.card().classes('glass-card p-5 flex flex-col justify-between relative'):
-                ui.label('MASS STORAGE').classes('text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest mb-4')
-                ui.label().bind_text_from(system_stats, 'hdd_status', backward=lambda x: str(x).upper()).classes('absolute top-4 right-5 text-lg font-bold text-slate-400 dark:text-slate-300')
-                with ui.row().classes('items-end justify-between w-full'):
-                    ui.label().bind_text_from(system_stats, 'hdd_percent', backward=lambda x: f'{x:.1f}%').classes('text-4xl font-bold text-positive')
-                with ui.element('div').classes('relative w-full my-4 h-6 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden'):
-                    ui.linear_progress(show_value=False).bind_value_from(system_stats, 'hdd_percent', backward=lambda x: x/100).classes('absolute inset-0 h-full bg-transparent').props('color=positive track-color=transparent')
-                    ui.label().bind_text_from(system_stats, 'hdd_used_gb', backward=lambda x: f'{x:.1f}GB').classes('absolute inset-0 flex items-center justify-center text-xs font-bold text-slate-800 dark:text-white z-10')
-                with ui.row().classes('justify-center w-full mt-2'):
-                    ui.label().bind_text_from(system_stats, 'hdd_total_gb', backward=lambda x: f'/ {x} GB').classes('text-sm text-slate-500 dark:text-slate-400 font-semibold')
-
-        # ── 2. IoT Environment & Smart Plugs ─────────────────────────────────
-        with ui.row().classes('items-center justify-between mt-8 mb-3 w-full flex-wrap gap-2'):
+        # ── 2. IoT Environment & Smart Plugs ──────────────────────────────────
+        with ui.row().classes('items-center justify-between mt-2 mb-1 w-full flex-wrap gap-2'):
             with ui.row().classes('items-center gap-2'):
                 ui.icon('sensors', color='secondary').classes('text-xl')
-                ui.label('IoT Environment & Smart Plugs').classes('text-lg font-bold text-slate-800 dark:text-gray-200')
+                ui.label('Environment').classes('text-lg font-bold text-slate-800 dark:text-gray-200')
             if on_nav_to_plugs:
-                ui.button('Manage Plugs Fleet →', on_click=on_nav_to_plugs, icon='electrical_services').props('flat rounded dense').classes('text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 px-3 py-1')
+                ui.button('Manage Plugs Fleet →', on_click=on_nav_to_plugs, icon='electrical_services').props(
+                    'flat rounded dense'
+                ).classes('text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 px-3 py-1')
 
         # Environmental Sensor Cards (ESP32 Multi-room)
-        iot_container = ui.row().classes('w-full gap-4 sm:gap-6 grid grid-cols-1 md:grid-cols-3 items-stretch mb-4')
+        iot_container = ui.row().classes('sensor-grid w-full gap-4 grid grid-cols-1 md:grid-cols-3 items-stretch')
 
         # Smart Plug Fleet Quick-Control Hub
-        with ui.card().classes('glass-card w-full p-4 sm:p-5 relative overflow-hidden'):
+        with ui.card().classes('glass-card fleet-overview w-full relative overflow-hidden'):
             with ui.row().classes('w-full items-center justify-between mb-3 flex-wrap gap-2'):
                 with ui.row().classes('items-center gap-2'):
                     ui.icon('power', color='positive').classes('text-lg')
-                    ui.label('Smart Plug Fleet Status').classes('text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide')
+                    ui.label('Connected devices').classes('text-sm font-semibold text-slate-700 dark:text-slate-300')
                 with ui.row().classes('items-center gap-3 text-xs font-semibold'):
-                    server_fleet_watts_label = ui.label('⚡ 0.0 W load').classes('text-amber-500 font-bold')
-                    server_fleet_active_label = ui.label('🟢 0/3 Active').classes('text-emerald-500 font-bold')
+                    server_fleet_watts_label = ui.label('0.0 W total').classes('text-amber-500 font-bold')
+                    server_fleet_active_label = ui.label('0/3 powered on').classes('text-emerald-500 font-bold')
 
-            iot_plugs_grid = ui.grid().classes('w-full gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3')
+            iot_plugs_grid = ui.grid().classes('quick-device-grid w-full')
 
         def update_iot_display():
             iot_container.clear()
             with iot_container:
                 if iot_devices:
                     for device_id, data in iot_devices.items():
-                        with ui.card().classes(
-                            'glass-card p-4 hover:scale-[1.02] transition-transform h-full flex flex-col justify-between'
-                        ):
-                            with ui.row().classes('items-center justify-between w-full mb-2'):
+                        with ui.card().classes('glass-card sensor-card flex flex-col justify-between'):
+                            with ui.row().classes('items-center justify-between w-full'):
                                 with ui.row().classes('items-center gap-2'):
                                     ui.icon('wifi', size='xs').classes('text-slate-400 dark:text-slate-300')
                                     with ui.column().classes('gap-0'):
-                                        ui.label(data.get('name', device_id.replace('esp32-', '').title())).classes(
-                                            'text-sm font-bold text-slate-700 dark:text-slate-200'
-                                        )
+                                        ui.label(
+                                            data.get('name', device_id.replace('esp32-', '').title())
+                                        ).classes('text-sm font-bold text-slate-700 dark:text-slate-200')
                                         ui.label(data.get('zone', 'Homelab')).classes('text-[10px] text-slate-400')
                                 ui.badge(data.get('status', 'Optimal'), color='positive').props('dense rounded').classes('text-[9px] font-semibold')
-                            ui.separator().classes('bg-slate-300/40 dark:bg-slate-700/40 mb-3')
-                            with ui.row().classes('justify-around items-center gap-4 mt-auto'):
-                                with ui.column().classes('items-center gap-0'):
-                                    ui.icon('thermostat', size='xs', color='orange')
-                                    ui.label(f"{data.get('temperature', 0)}°C").classes('text-lg font-bold text-slate-800 dark:text-white')
-                                    ui.label('TEMP').classes('text-[9px] text-slate-400 font-bold')
-                                with ui.column().classes('items-center gap-0'):
-                                    ui.icon('water_drop', size='xs', color='blue')
-                                    ui.label(f"{data.get('humidity', 0)}%").classes('text-lg font-bold text-slate-800 dark:text-white')
-                                    ui.label('HUMIDITY').classes('text-[9px] text-slate-400 font-bold')
-                                with ui.column().classes('items-center gap-0'):
-                                    ui.icon('signal_cellular_alt', size='xs', color='positive')
-                                    ui.label(f"{data.get('rssi', -60)}").classes('text-lg font-bold text-slate-800 dark:text-white')
-                                    ui.label('RSSI dBm').classes('text-[9px] text-slate-400 font-bold')
+                            with ui.row().classes('room-readings w-full justify-between items-end'):
+                                with ui.column().classes('gap-1'):
+                                    ui.label(f"{data.get('temperature', 0):.1f}°").classes('room-temperature')
+                                    ui.label('TEMPERATURE · °C').classes('room-caption')
+                                with ui.column().classes('room-secondary gap-2'):
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.icon('water_drop', size='15px')
+                                        ui.label(f"{data.get('humidity', 0):.1f}%").classes('room-detail')
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.icon('wifi', size='15px')
+                                        ui.label(f"{data.get('rssi', -60)} dBm").classes('room-detail')
 
             # Populate smart plug quick-tiles
             iot_plugs_grid.clear()
@@ -197,20 +198,17 @@ def render_server_content(on_nav_to_plugs=None):
                                 f"text-[11px] font-bold px-3 py-1 transition-colors {'bg-emerald-500 text-white hover:bg-emerald-600' if is_on else 'bg-blue-500 text-white hover:bg-blue-600'}"
                             )
 
-            server_fleet_watts_label.set_text(f"⚡ {total_w:.1f} W load")
-            server_fleet_active_label.set_text(f"🟢 {active_cnt}/{len(tuya_local.DEVICES)} Active")
+            server_fleet_watts_label.set_text(f"{total_w:.1f} W total")
+            server_fleet_active_label.set_text(f"{active_cnt}/{len(tuya_local.DEVICES)} powered on")
 
         ui.timer(3.0, update_iot_display)
 
         # ── 3. AI Analysis Card ──────────────────────────────────────────────
-        with ui.card().classes(
-            'glass-card w-full p-4 sm:p-6 mt-2 sm:mt-4 bg-slate-200/50 dark:bg-slate-800/50 '
-            'border-l-4 border-slate-300 dark:border-white'
-        ):
+        with ui.card().classes('glass-card analysis-panel w-full'):
             with ui.row().classes('items-start gap-4'):
                 with ui.column().classes('w-full'):
                     with ui.row().classes('items-center justify-between w-full mb-1'):
-                        ui.label('DeepMind System Analysis').classes(
+                        ui.label('DeepMind analysis').classes(
                             'text-slate-900 dark:text-white text-sm font-bold uppercase tracking-widest'
                         )
                         async def generate_analysis():

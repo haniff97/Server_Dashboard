@@ -30,33 +30,55 @@ def index_page():
     dark_mode.enable()
     add_common_styles()
     ui.colors(
-        primary='#3b82f6', secondary='#8b5cf6', accent='#ec4899',
-        positive='#10b981', warning='#f59e0b', negative='#ef4444'
+        primary='#226dbe', secondary='#6557b8', accent='#a66328',
+        positive='#16805e', warning='#b77915', negative='#c23d58'
     )
-    
-    with ui.header().classes('glass-header items-center justify-between p-3 fixed top-0 w-full z-50 flex-wrap sm:flex-nowrap'):
-        with ui.row().classes('items-center gap-3 z-10 w-full sm:w-auto sm:flex-1 justify-center sm:justify-start relative'):
-            ui.icon('dns', size='md', color='primary').classes('drop-shadow-md')
-            ui.label('HOMELAB').classes('text-2xl font-bold tracking-tight text-slate-900 dark:text-white')
-            # Mobile-only dark mode button placed on the right edge
-            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes(
-                'lt-sm absolute right-2 text-slate-900 dark:text-white'
-            ).bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
-        
-        with ui.row().classes('items-center justify-center z-10 w-full sm:w-auto sm:flex-1 mt-3 sm:mt-0'):
-            toggle = ui.toggle(
-                ['Server', 'Energy', 'Plugs', 'Network'], value='Server'
-            ).props('unelevated rounded').classes('q-btn-group').style('border-radius: 20px; font-weight: 600;')
 
-        with ui.row().classes('items-center justify-end gap-4 z-10 gt-xs sm:flex-1'):
-            with ui.row().classes('items-center gap-2 bg-slate-200 dark:bg-slate-800 rounded-full px-3 py-1 gt-sm'):
-                ui.icon('schedule', size='xs', color='gray-400')
-                ui.label().bind_text_from(state, 'last_update').classes('text-sm text-slate-600 dark:text-gray-300 font-mono')
-            ui.button(icon='dark_mode', on_click=lambda: dark_mode.toggle()).props('flat round').classes(
-                'text-slate-900 dark:text-white'
-            ).bind_icon_from(dark_mode, 'value', backward=lambda x: 'dark_mode' if x else 'light_mode')
+    # ── Horizon App Topbar ────────────────────────────────────────────────────
+    with ui.header().classes('app-topbar items-center justify-between'):
+        with ui.row().classes('items-center gap-3'):
+            with ui.element('div').classes('brand-symbol'):
+                ui.icon('dns', size='21px')
+            with ui.column().classes('gap-0'):
+                ui.label('homelab').classes('brand-name')
+                ui.label('CONTROL CENTER').classes('brand-caption')
 
-    with ui.column().classes('w-full max-w-7xl mx-auto px-4 sm:px-6 pt-0 pb-4 sm:pb-6 mt-0 gap-4 sm:gap-8'):
+        toggle = ui.toggle(
+            ['Server', 'Energy', 'Plugs', 'Network'], value='Server'
+        ).props('unelevated no-caps').classes('workspace-nav')
+
+        with ui.row().classes('items-center gap-3'):
+            ui.label().bind_text_from(
+                state, 'last_update',
+                backward=lambda x: f'Updated {x}' if x else 'Collecting data'
+            ).classes('shell-update')
+            ui.button(icon='light_mode', on_click=lambda: dark_mode.toggle()).props(
+                'flat round aria-label="Toggle theme"'
+            ).classes('theme-button').bind_icon_from(
+                dark_mode, 'value', backward=lambda x: 'light_mode' if x else 'dark_mode'
+            )
+
+    # ── Page heading copy per tab ─────────────────────────────────────────────
+    headings = {
+        'Server':  ('Server overview',  'System resources, room conditions and connected devices.'),
+        'Energy':  ('Energy monitor',   'Power consumption, daily usage and cost estimates.'),
+        'Plugs':   ('Device fleet',     'Monitor and control your connected smart plugs.'),
+        'Network': ('Network monitor',  'Latency, packet loss and route diagnostics.'),
+    }
+
+    # ── Main content shell ────────────────────────────────────────────────────
+    with ui.column().classes('dashboard-main'):
+        with ui.column().classes('page-heading gap-1'):
+            ui.label('YOUR HOMELAB').bind_text_from(
+                toggle, 'value', backward=lambda x: f'HOMELAB / {x.upper()}'
+            ).classes('page-eyebrow')
+            ui.label().bind_text_from(
+                toggle, 'value', backward=lambda x: headings[x][0]
+            ).classes('page-title')
+            ui.label().bind_text_from(
+                toggle, 'value', backward=lambda x: headings[x][1]
+            ).classes('page-description')
+
         async def on_tab_change(e):
             if e.value == 'Network':
                 await trigger_network_ai()

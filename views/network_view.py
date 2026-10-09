@@ -43,8 +43,9 @@ def render_network_content():
                             {
                                 'name': NETWORK_TARGET_LABELS.get(target, target),
                                 'type': 'line',
-                                'smooth': True,
+                                'smooth': False,
                                 'showSymbol': False,
+                                'lineStyle': {'width': 3},
                                 'data': list(network_state['targets'][target]['history'])
                             }
                             for target in NETWORK_TARGETS
@@ -71,7 +72,7 @@ def render_network_content():
                             'splitLine': {'lineStyle': {'color': 'rgba(255,255,255,0.08)'}}
                         },
                         'series': init_series,
-                        'color': ['#3b82f6', '#10b981', '#f59e0b']
+                        'color': ['#3b82f6', '#a855f7', '#f97316']
                     }).classes('w-full h-64')
 
                 # Per-target status cards

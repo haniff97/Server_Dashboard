@@ -68,6 +68,22 @@ def render_plugs_content():
     pending_off_dev = {'key': None}
     detail_modal_dev = {'key': 'server'}
 
+    pending_switches = set()
+
+    async def _toggle_with_pending(dk, target):
+        if dk in pending_switches:
+            return False
+        pending_switches.add(dk)
+        button = cards_data[dk]['switch_btn']
+        button.disable()
+        button.props('loading')
+        try:
+            return await toggle_plug(dk, target)
+        finally:
+            pending_switches.discard(dk)
+            button.props(remove='loading')
+            button.enable()
+
     with ui.column().classes('w-full gap-4 sm:gap-6'):
 
         # ── Safety Confirmation Modal for Critical Devices ───────────────────
@@ -81,7 +97,7 @@ def render_plugs_content():
                 async def _do_confirmed_off():
                     dk = pending_off_dev['key']
                     if dk and dk in tuya_local.DEVICES:
-                        ok_cmd = await toggle_plug(dk, False)
+                        ok_cmd = await _toggle_with_pending(dk, False)
                         if ok_cmd:
                             with plug_lock:
                                 if plug_state.get(dk, {}).get("status"):
@@ -185,7 +201,7 @@ def render_plugs_content():
 
                 async def handle_turn_all_on():
                     for dk in tuya_local.DEVICES:
-                        await toggle_plug(dk, True)
+                        await _toggle_with_pending(dk, True)
                     ui.notify("✅ All smart plugs turned ON", type='positive')
                     _refresh_plugs()
 
@@ -194,7 +210,7 @@ def render_plugs_content():
                     for dk, cfg in tuya_local.DEVICES.items():
                         is_crit = cfg.get("is_critical", False) or cfg.get("is_server", False)
                         if not is_crit:
-                            await toggle_plug(dk, False)
+                            await _toggle_with_pending(dk, False)
                             count += 1
                     ui.notify(f"🔴 Turned OFF {count} non-critical plugs (Server & Critical protected)", type='info')
                     _refresh_plugs()
@@ -227,7 +243,7 @@ def render_plugs_content():
                     with ui.row().classes('items-baseline gap-2 mt-1'):
                         fleet_today_kwh_label = ui.label('0.00 kWh').classes('text-xl sm:text-2xl font-black text-blue-500')
                         fleet_today_cost_label = ui.label('RM 0.00').classes('text-xs font-bold text-slate-600 dark:text-slate-300')
-                    ui.label('TNB Tariff Rate calculation').classes('text-[10px] text-slate-400')
+                    ui.label('Domestic General · monitored estimate').classes('text-[10px] text-slate-400')
 
                 # 4. Top Consumer
                 with ui.column().classes('p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/60'):
@@ -324,7 +340,7 @@ def render_plugs_content():
                                         return
 
                                     target_state = not cur_on
-                                    ok_cmd = await toggle_plug(dk, target_state)
+                                    ok_cmd = await _toggle_with_pending(dk, target_state)
                                     if ok_cmd:
                                         with plug_lock:
                                             if plug_state.get(dk, {}).get("status"):
@@ -439,10 +455,11 @@ def render_plugs_content():
                 data['kwh_label'].set_text(f"{dev_kwh:.3f}")
                 data['rm_label'].set_text(f"RM{dev_rm:.2f}")
 
-                data['switch_btn'].set_text("● ON" if on else "○ OFF")
-                data['switch_btn'].classes(
-                    replace=f"plug-switch-btn {'plug-switch-on' if on else 'plug-switch-off'}"
-                )
+                if dk not in pending_switches:
+                    data['switch_btn'].set_text("● ON" if on else "○ OFF")
+                    data['switch_btn'].classes(
+                        replace=f"plug-switch-btn {'plug-switch-on' if on else 'plug-switch-off'}"
+                    )
                 if on:
                     data['card_el'].classes(add='plug-active')
                 else:
