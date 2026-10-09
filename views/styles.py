@@ -80,13 +80,12 @@ def add_common_styles():
             min-height:37px; padding:0 20px;
             border-radius:9px!important; font-size:12px; font-weight:500!important;
         }
-        body .workspace-nav.q-btn-group .q-btn.bg-primary,
-        body .workspace-nav.q-btn-group .q-btn.bg-primary.text-white {
+        body .workspace-nav.q-btn-group .q-btn.bg-primary {
             background:var(--surface)!important;
             --q-primary:var(--surface)!important;
-            color:var(--ink)!important;
             box-shadow:0 2px 5px rgba(0,0,0,.05)!important;
         }
+        .text-custom-ink { color: var(--ink) !important; }
 
         /* ── Page Layout ──────────────────────────────────────────────────── */
         .q-page-container { padding-top:88px!important; }

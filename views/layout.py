@@ -45,7 +45,7 @@ def index_page():
 
         toggle = ui.toggle(
             ['Server', 'Energy', 'Plugs', 'Network'], value='Server'
-        ).props('unelevated no-caps').classes('workspace-nav')
+        ).props('unelevated no-caps toggle-text-color="custom-ink"').classes('workspace-nav')
 
         with ui.row().classes('items-center gap-3'):
             ui.label().bind_text_from(
