@@ -13,6 +13,7 @@ import asyncio
 import threading
 import time
 import random
+import re
 from collections import deque
 from typing import Any, Dict, Optional
 from datetime import datetime
@@ -539,6 +540,12 @@ def add_common_styles():
         .analysis-panel { margin-top:0!important; padding:18px 22px!important; border-left:1px solid var(--stroke)!important; }
         .analysis-panel .q-label { font-size:12px; }
         .analysis-panel .q-label:first-child { text-transform:none; letter-spacing:0; font-weight:600; }
+        .ports-table { background:var(--surface)!important; color:var(--ink); box-shadow:none; }
+        .ports-table th { color:var(--muted); font-size:11px; font-weight:600; }
+        .ports-table td { font-size:12px; border-color:var(--stroke)!important; }
+        .ports-table td:nth-child(1), .ports-table td:nth-child(5) { font-family:ui-monospace,monospace; }
+        .ports-table td:last-child { white-space:normal; min-width:220px; max-width:420px; }
+        .ports-table .q-table__bottom { color:var(--muted); border-color:var(--stroke); }
         .energy-summary { min-height:172px; }
         .energy-number { color:var(--ink); font-variant-numeric:tabular-nums; letter-spacing:-1.2px; font-size:43px; }
         .split-left { flex:0 0 200px; padding:24px; }
@@ -1515,6 +1522,195 @@ def render_network_content():
     ui.timer(2.0, _refresh_network)
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  PORT INVENTORY — static design fixture from the supplied ss -tulpn output
+# ─────────────────────────────────────────────────────────────────────────────
+PORT_BINDINGS = [('UDP', 53, '0.0.0.0', 'dnsmasq (PID 1009)'),
+ ('UDP', 111, '0.0.0.0', 'rpcbind (PID 567), systemd (PID 1)'),
+ ('UDP', 8472, '0.0.0.0', 'Not reported'),
+ ('UDP', 323, '127.0.0.1', 'chronyd (PID 968)'),
+ ('UDP', 48410, '0.0.0.0', 'tailscaled (PID 972)'),
+ ('UDP', 53292, '[::]', 'tailscaled (PID 972)'),
+ ('UDP', 53, '[::]', 'dnsmasq (PID 1009)'),
+ ('UDP', 111, '[::]', 'rpcbind (PID 567), systemd (PID 1)'),
+ ('UDP', 323, '[::1]', 'chronyd (PID 968)'),
+ ('UDP', 546, '[fe80::7dca:4425:aef3:8125]%end0', 'NetworkManager (PID 732)'),
+ ('UDP', 46403, '*', 'cloudflared (PID 3334004)'),
+ ('TCP', 33574, '0.0.0.0', 'tailscaled (PID 972)'),
+ ('TCP', 9104, '0.0.0.0', 'docker-proxy (PID 38963)'),
+ ('TCP', 9115, '0.0.0.0', 'docker-proxy (PID 38831)'),
+ ('TCP', 9090, '0.0.0.0', 'docker-proxy (PID 39093)'),
+ ('TCP', 111, '0.0.0.0', 'rpcbind (PID 567), systemd (PID 1)'),
+ ('TCP', 22, '0.0.0.0', 'sshd (PID 1063)'),
+ ('TCP', 53, '0.0.0.0', 'dnsmasq (PID 1009)'),
+ ('TCP', 139, '0.0.0.0', 'smbd-scavenger (PID 1480941), smbd (PID 4155)'),
+ ('TCP', 445, '0.0.0.0', 'smbd-scavenger (PID 1480941), smbd (PID 4155)'),
+ ('TCP', 10010, '127.0.0.1', 'containerd (PID 19705)'),
+ ('TCP', 1883, '127.0.0.1', 'mosquitto (PID 1017)'),
+ ('TCP', 9324, '0.0.0.0', 'python (PID 2188387)'),
+ ('TCP', 3004, '0.0.0.0', 'uvicorn (PID 2188391)'),
+ ('TCP', 3000, '0.0.0.0', 'python3 (PID 3948776)'),
+ ('TCP', 10249, '127.0.0.1', 'k3s-server (PID 19222)'),
+ ('TCP', 10248, '127.0.0.1', 'k3s-server (PID 19222)'),
+ ('TCP', 10257, '127.0.0.1', 'k3s-server (PID 19222)'),
+ ('TCP', 10256, '127.0.0.1', 'k3s-server (PID 19222)'),
+ ('TCP', 10259, '127.0.0.1', 'k3s-server (PID 19222)'),
+ ('TCP', 10258, '127.0.0.1', 'k3s-server (PID 19222)'),
+ ('TCP', 6334, '0.0.0.0', 'docker-proxy (PID 39206)'),
+ ('TCP', 6333, '0.0.0.0', 'docker-proxy (PID 39167)'),
+ ('TCP', 6444, '127.0.0.1', 'k3s-server (PID 19222)'),
+ ('TCP', 8090, '127.0.0.1', 'python (PID 3332114)'),
+ ('TCP', 20241, '127.0.0.1', 'cloudflared (PID 3334004)'),
+ ('TCP', 8085, '0.0.0.0', 'docker-proxy (PID 3875750)'),
+ ('TCP', 8080, '0.0.0.0', 'docker-proxy (PID 39681)'),
+ ('TCP', 8081, '0.0.0.0', 'docker-proxy (PID 39415)'),
+ ('TCP', 4006, '0.0.0.0', 'docker-proxy (PID 39307)'),
+ ('TCP', 5008, '*', 'node /mnt/nvme/ (PID 2195350)'),
+ ('TCP', 9104, '[::]', 'docker-proxy (PID 38981)'),
+ ('TCP', 9115, '[::]', 'docker-proxy (PID 38853)'),
+ ('TCP', 9090, '[::]', 'docker-proxy (PID 39099)'),
+ ('TCP', 9100, '*', 'node_exporter (PID 38677)'),
+ ('TCP', 1883, '[::1]', 'mosquitto (PID 1017)'),
+ ('TCP', 111, '[::]', 'rpcbind (PID 567), systemd (PID 1)'),
+ ('TCP', 22, '[::]', 'sshd (PID 1063)'),
+ ('TCP', 53, '[::]', 'dnsmasq (PID 1009)'),
+ ('TCP', 139, '[::]', 'smbd-scavenger (PID 1480941), smbd (PID 4155)'),
+ ('TCP', 445, '[::]', 'smbd-scavenger (PID 1480941), smbd (PID 4155)'),
+ ('TCP', 34481, '*', 'loophole (PID 2194997)'),
+ ('TCP', 5173, '*', 'node /mnt/nvme/ (PID 2188390)'),
+ ('TCP', 10250, '*', 'k3s-server (PID 19222)'),
+ ('TCP', 34879, '*', 'loophole (PID 2188397)'),
+ ('TCP', 6334, '[::]', 'docker-proxy (PID 39216)'),
+ ('TCP', 6333, '[::]', 'docker-proxy (PID 39174)'),
+ ('TCP', 6443, '*', 'k3s-server (PID 19222)'),
+ ('TCP', 8085, '[::]', 'docker-proxy (PID 3875764)'),
+ ('TCP', 8080, '[::]', 'docker-proxy (PID 39694)'),
+ ('TCP', 8081, '[::]', 'docker-proxy (PID 39422)'),
+ ('TCP', 4006, '[::]', 'docker-proxy (PID 39315)')]
+
+
+def port_inventory_rows():
+    """Group socket bindings by protocol and port, preserving addresses/owners."""
+    groups = {}
+    for protocol, port, address, owner in PORT_BINDINGS:
+        group = groups.setdefault((protocol, port), {'addresses': set(), 'owners': set()})
+        group['addresses'].add(address)
+        group['owners'].add(owner)
+    rows = []
+    for (protocol, port), group in sorted(groups.items(), key=lambda item: (item[0][1], item[0][0])):
+        addresses = sorted(group['addresses'])
+        loopback_only = all(address in ('127.0.0.1', '[::1]') for address in addresses)
+        rows.append({
+            'id': f'{protocol}-{port}', 'port': port, 'protocol': protocol,
+            'address': ' · '.join(addresses),
+            'scope': 'Loopback only' if loopback_only else 'Network bind',
+            'owner': ' · '.join(sorted(group['owners'])),
+            'running': True,
+            'status': 'Running',
+            'pids': sorted(set(re.findall(r'PID (\d+)', ' '.join(group['owners'])))),
+            'controllable': bool(re.findall(r'PID (\d+)', ' '.join(group['owners']))) and not any('docker-proxy' in owner for owner in group['owners']),
+        })
+    return rows
+
+
+def render_ports_content():
+    rows = port_inventory_rows()
+    stat_labels = []
+    with ui.column().classes('w-full gap-5'):
+        with ui.row().classes('w-full items-center justify-between gap-3'):
+            with ui.row().classes('items-center gap-2'):
+                ui.badge('SNAPSHOT', color='primary').props('outline')
+                ui.label('orangepi4pro · supplied socket inventory').classes('text-sm').style('color:var(--muted)')
+            ui.label('Simulated controls · no host commands').classes('text-xs').style('color:var(--muted)')
+
+        with ui.element('div').classes('w-full grid grid-cols-2 md:grid-cols-4 gap-3'):
+            stats = [
+                ('Occupied port numbers', len({row['port'] for row in rows}), 'Across TCP and UDP'),
+                ('TCP ports', sum(row['protocol'] == 'TCP' for row in rows), 'Listening sockets'),
+                ('UDP ports', sum(row['protocol'] == 'UDP' for row in rows), 'Bound sockets'),
+                ('Loopback only', sum(row['scope'] == 'Loopback only' for row in rows), 'Protocol / port groups'),
+            ]
+            for title, count, caption in stats:
+                with ui.card().classes('glass-card w-full p-5 gap-2'):
+                    ui.label(title).classes('text-xs font-medium').style('color:var(--muted)')
+                    stat_labels.append(ui.label(str(count)).classes('text-3xl font-semibold').style('color:var(--ink);font-variant-numeric:tabular-nums'))
+                    ui.label(caption).classes('text-xs').style('color:var(--muted)')
+
+        with ui.card().classes('glass-card w-full p-5 gap-4'):
+            with ui.row().classes('w-full items-center justify-between gap-3'):
+                ui.label('Ports & services').classes('text-base font-semibold')
+                protocol_filter = ui.toggle(['All', 'TCP', 'UDP'], value='All').props('no-caps unelevated dense')
+            search = ui.input(placeholder='Search port, process, PID or bind address').props('outlined dense clearable').classes('w-full')
+            columns = [
+                {'name': 'port', 'label': 'Port', 'field': 'port', 'align': 'left', 'sortable': True},
+                {'name': 'status', 'label': 'State', 'field': 'status', 'align': 'left', 'sortable': True},
+                {'name': 'actions', 'label': 'Control', 'field': 'id', 'align': 'left'},
+                {'name': 'protocol', 'label': 'Protocol', 'field': 'protocol', 'align': 'left', 'sortable': True},
+                {'name': 'address', 'label': 'Bind address', 'field': 'address', 'align': 'left'},
+                {'name': 'scope', 'label': 'Bind scope', 'field': 'scope', 'align': 'left', 'sortable': True},
+                {'name': 'owner', 'label': 'Process / PID', 'field': 'owner', 'align': 'left'},
+            ]
+            table = ui.table(columns=columns, rows=rows, row_key='id',
+                             pagination={'rowsPerPage': 15, 'sortBy': 'port'}).classes('ports-table w-full')
+            table.add_slot('body-cell-status', r'''<q-td :props="props">
+                <q-badge :color="props.row.running ? 'positive' : 'grey'" outline>{{ props.row.status }}</q-badge>
+            </q-td>''')
+            table.add_slot('body-cell-actions', r'''<q-td :props="props">
+                <q-btn v-if="props.row.controllable" dense flat no-caps
+                    :color="props.row.running ? 'negative' : 'positive'"
+                    :icon="props.row.running ? 'stop' : 'play_arrow'"
+                    :label="props.row.running ? 'Stop' : 'Start'"
+                    @click="$parent.$emit('service_action', props.row.id)" />
+                <span v-else style="color:var(--muted);font-size:11px">Unmanaged
+                    <q-tooltip>Service or container mapping is required for this socket.</q-tooltip>
+                </span>
+            </q-td>''')
+            pending_action = {'ids': [], 'running': False}
+            with ui.dialog() as service_dialog, ui.card().classes('glass-card p-6 gap-4').style('max-width:440px'):
+                ui.label('Stop service?').classes('text-lg font-semibold')
+                action_description = ui.label().classes('text-sm').style('color:var(--muted)')
+                ui.label('Preview only: no process on your server will be stopped.').classes('text-xs').style('color:var(--muted)')
+                with ui.row().classes('w-full justify-end gap-2'):
+                    ui.button('Cancel', on_click=service_dialog.close).props('flat no-caps')
+                    def apply_action():
+                        for row in rows:
+                            if row['id'] in pending_action['ids']:
+                                row['running'] = pending_action['running']
+                                row['status'] = 'Running' if row['running'] else 'Stopped'
+                        filter_protocol()
+                        active = [row for row in rows if row['running']]
+                        counts = [len({row['port'] for row in active}),
+                                  sum(row['protocol'] == 'TCP' for row in active),
+                                  sum(row['protocol'] == 'UDP' for row in active),
+                                  sum(row['scope'] == 'Loopback only' for row in active)]
+                        for label, count in zip(stat_labels, counts):
+                            label.set_text(str(count))
+                        service_dialog.close()
+                        ui.notify('Service started (preview)' if pending_action['running'] else 'Service stopped (preview)', type='info')
+                    ui.button('Stop service', on_click=apply_action, color='negative').props('no-caps')
+            def request_action(event):
+                row = next((row for row in rows if row['id'] == event.args), None)
+                if not row or not row['controllable']:
+                    return
+                related = [item for item in rows if set(row['pids']) & set(item['pids'])]
+                pending_action.update(ids=[item['id'] for item in related], running=not row['running'])
+                if row['running']:
+                    action_description.set_text(f"{row['owner']} uses {len(related)} protocol/port entries. Stopping it affects all these entries.")
+                    service_dialog.open()
+                else:
+                    apply_action()
+            table.on('service_action', request_action)
+            search.bind_value_to(table, 'filter' , forward=lambda value: value or '')
+            def filter_protocol():
+                table.rows = [row for row in rows if protocol_filter.value == 'All' or row['protocol'] == protocol_filter.value]
+                table.update()
+            protocol_filter.on_value_change(filter_protocol)
+            ui.label('Start / Stop applies to all ports owned by the same process. Unmanaged sockets need a service or container mapping.').classes('text-xs').style('color:var(--muted)')
+
+        with ui.row().classes('w-full items-start gap-3 px-1'):
+            ui.icon('info_outline', size='sm').style('color:var(--muted)')
+            ui.label('A listed port is occupied in this snapshot. Network bind does not prove internet access; firewall and routing still apply. An unlisted port is not guaranteed free now.').classes('text-xs leading-relaxed').style('color:var(--muted);max-width:850px')
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  MAIN SPA PAGE
 # ─────────────────────────────────────────────────────────────────────────────
 @ui.page('/')
@@ -1532,7 +1728,7 @@ def index_page():
             with ui.column().classes('gap-0'):
                 ui.label('homelab').classes('brand-name')
                 ui.label('CONTROL CENTER').classes('brand-caption')
-        toggle = ui.toggle(['Server', 'Energy', 'Plugs', 'Network'], value='Server').props('unelevated no-caps').classes('workspace-nav')
+        toggle = ui.toggle(['Server', 'Energy', 'Plugs', 'Network', 'Ports'], value='Server').props('unelevated no-caps').classes('workspace-nav')
         with ui.row().classes('items-center gap-3'):
             ui.label().bind_text_from(globals(), 'last_update', backward=lambda x: f'Updated {x}' if x else 'Collecting data').classes('shell-update')
             ui.button(icon='dark_mode', on_click=dark_mode.toggle).props('flat round aria-label="Toggle theme"').classes('theme-button').bind_icon_from(dark_mode, 'value', backward=lambda x: 'light_mode' if x else 'dark_mode')
@@ -1542,6 +1738,7 @@ def index_page():
         'Energy': ('Energy monitor', 'Power consumption, daily usage and cost estimates.'),
         'Plugs': ('Device fleet', 'Monitor and control your connected smart plugs.'),
         'Network': ('Network monitor', 'Latency, packet loss and route diagnostics.'),
+        'Ports': ('Port inventory', 'See occupied ports and the processes using them.'),
     }
     with ui.column().classes('dashboard-main'):
         with ui.column().classes('page-heading gap-1'):
@@ -1557,6 +1754,8 @@ def index_page():
                 render_plugs_content()
             with ui.tab_panel('Network').classes('p-0'):
                 render_network_content()
+            with ui.tab_panel('Ports').classes('p-0'):
+                render_ports_content()
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  STARTUP

@@ -21,6 +21,7 @@ from views.server_view import render_server_content
 from views.energy_view import render_energy_content
 from views.plugs_view import render_plugs_content
 from views.network_view import render_network_content
+from views.ports_view import render_ports_content
 from controllers.network_controller import trigger_network_ai
 
 
@@ -44,7 +45,7 @@ def index_page():
                 ui.label('CONTROL CENTER').classes('brand-caption')
 
         toggle = ui.toggle(
-            ['Server', 'Energy', 'Plugs', 'Network'], value='Server'
+            ['Server', 'Energy', 'Plugs', 'Network', 'Ports'], value='Server'
         ).props('unelevated no-caps toggle-text-color="custom-ink"').classes('workspace-nav')
 
         with ui.row().classes('items-center gap-3'):
@@ -64,6 +65,7 @@ def index_page():
         'Energy':  ('Energy monitor',   'Power consumption, daily usage and cost estimates.'),
         'Plugs':   ('Device fleet',     'Monitor and control your connected smart plugs.'),
         'Network': ('Network monitor',  'Latency, packet loss and route diagnostics.'),
+        'Ports': ('Port inventory', 'Live host sockets and configured service controls.'),
     }
 
     # ── Main content shell ────────────────────────────────────────────────────
@@ -94,6 +96,8 @@ def index_page():
                 render_plugs_content()
             with ui.tab_panel('Network').classes('p-0'):
                 render_network_content()
+            with ui.tab_panel('Ports').classes('p-0'):
+                render_ports_content()
 
 
 @ui.page('/cloud')

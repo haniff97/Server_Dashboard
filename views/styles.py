@@ -160,6 +160,8 @@ def add_common_styles():
         .analysis-panel .q-label { font-size:12px; }
 
         /* ── Energy Summary Cards ─────────────────────────────────────────── */
+        .ports-table { background:var(--surface)!important; color:var(--ink); box-shadow:none; }
+        .ports-table td, .ports-table th { border-color:var(--stroke)!important; }
         .energy-summary { min-height:172px; }
         .energy-number {
             color:var(--ink); font-variant-numeric:tabular-nums;

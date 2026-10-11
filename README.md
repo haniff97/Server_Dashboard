@@ -34,6 +34,52 @@ A real-time monitoring and control system for a self-hosted home server. Built w
 
 ---
 
+## Ports page and service controls
+
+The production navbar includes **Ports** after **Network**. It reads the dashboard
+host's TCP/UDP bindings using `ss -H -tulpn`, with search, protocol filtering and a
+manual refresh. Status refreshes every 15 seconds. It monitors the machine running
+`app.py`; it does not scan a remote host from the design preview.
+
+Install the Linux `iproute2` package if `ss` is missing. Process names/PIDs are only
+shown when the dashboard user has permission to inspect them.
+
+### Enable Start / Stop
+
+1. Copy `port_services.example.json` to `port_services.json` and edit it to match
+   services on your server. Supported managers: `systemd`, `docker`, `pm2`. Map
+   each service's target and all its TCP/UDP ports. Docker targets must be container
+   names, not `docker-proxy` PIDs; PM2 targets must already exist in that user's PM2.
+2. Set a strong `PORT_CONTROL_TOKEN` in the dashboard environment. Optionally set
+   `PORT_SERVICES_FILE` to the absolute path of the configuration file.
+3. Restart the dashboard. Enter the token in the Ports page to authorize commands.
+
+Unconfigured ports remain read-only. Configured stopped services stay listed, so
+Start remains available. Both actions require confirmation and affect the entire
+service, including its other ports. Start is rejected when a configured port is
+already occupied while the service is stopped. Actual service-manager state is
+checked after each command; an unconfirmed state is shown as an error.
+
+The dashboard account must already have permission to manage the configured
+services. Commands run as that account, without interactive sudo or shell commands.
+This change does not grant system permissions. PM2 uses the dashboard account's
+process list. Docker needs access to the relevant daemon. For systemd, use scoped
+host permissions for the specific units rather than running the dashboard as root.
+The token is not persisted in browser storage. Use the controls through a trusted,
+protected connection. Stopping the `homelab-dashboard` manager entry is blocked.
+
+The JSON file is an administrator-controlled allowlist; UI events cannot supply
+arbitrary commands, service targets or PIDs. Stop/Start operate only on configured
+targets. Live Orange Pi service commands were not exercised during local testing.
+
+Validation:
+
+```bash
+python3 -m unittest test_port_manager test_switch_response test_tnb_tariff -v
+```
+
+---
+
 ## Recent fixes (9 October 2026)
 
 ### Switch response delay

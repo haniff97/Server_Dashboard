@@ -218,6 +218,22 @@ def get_today_summary(device_id: str) -> dict:
     }
 
 
+def get_current_month_usage(device_id):
+    """Read the current month directly, never fall back to an older summary."""
+    month_start = date.today().replace(day=1).isoformat()
+    with get_conn() as conn:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT COALESCE(SUM(wh_delta), 0) / 1000 AS total_kwh
+            FROM plug_energy
+            WHERE device_id = %s AND polled_at >= %s
+                AND polled_at < DATE_ADD(%s, INTERVAL 1 MONTH)
+        """, (device_id, month_start, month_start))
+        row = cursor.fetchone()
+        cursor.close()
+    return float(row['total_kwh'] or 0)
+
+
 def get_power_history(device_id: str, limit: int = 120) -> list:
     """Return last N power readings for chart."""
     with get_conn() as conn:

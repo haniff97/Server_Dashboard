@@ -1,0 +1,4 @@
+[
+  {"id":"mqtt","name":"Mosquitto","manager":"systemd","target":"mosquitto.service","ports":[{"protocol":"TCP","port":1883}]},
+  {"id":"exporter","name":"MQTT exporter","manager":"pm2","target":"mqtt-exporter","ports":[{"protocol":"TCP","port":9324}]}
+]

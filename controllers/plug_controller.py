@@ -23,68 +23,72 @@ import models.state as state
 from controllers.server_controller import publish_local_mqtt
 
 
-# ── Polling thread (runs in daemon thread) ────────────────────────────────────
+def persist_reading(dev_key, status, wh_delta):
+    """Local telemetry is independent of optional cloud/MQTT publishers."""
+    try:
+        db.insert_energy(
+            device_id=tuya_local.DEVICES[dev_key]['id'],
+            device_name=status['device_name'], watts=status['watts'],
+            wh_delta=wh_delta, voltage=status['voltage'],
+            current_ma=status['current_ma'],
+        )
+    except Exception as exc:
+        print(f"[db] insert error ({dev_key}): {exc}")
+    else:
+        try:
+            db.aggregate_daily(tuya_local.DEVICES[dev_key]['id'])
+        except Exception as exc:
+            print(f"[db] daily summary error ({dev_key}): {exc}")
+    for name, publish in (
+        ('aws', lambda: aws_iot_publisher.publish(dev_key, status, wh_delta)),
+        ('mqtt', lambda: publish_local_mqtt(dev_key, status['watts'])),
+    ):
+        try:
+            publish()
+        except Exception as exc:
+            print(f"[{name}] publish error ({dev_key}): {exc}")
+
+
 def plug_polling_loop():
-    """Poll all smart plugs via tinytuya and persist to DB."""
-    last_poll_time: Dict[str, Optional[float]] = {
-        "plug": None, "server": None, "extension": None
-    }
-
+    """Poll plugs; release the UI state lock before any database/network I/O."""
+    last_poll_time = {key: None for key in tuya_local.DEVICES}
     while True:
-        for dev_key in ("plug", "server", "extension"):
+        for dev_key in tuya_local.DEVICES:
             status = tuya_local.get_status(dev_key)
-            now = time.time()
-
+            now = time.monotonic()
             with state.plug_lock:
+                state.plug_state[dev_key]['ok'] = bool(status)
                 if status:
-                    state.plug_state[dev_key]["status"] = status
-                    state.plug_state[dev_key]["ok"]     = True
-                    state.plug_state[dev_key]["history"].append({
-                        "t": datetime.now().strftime("%H:%M:%S"),
-                        "w": status["watts"],
-                    })
-
-                    wh_delta = 0.0
-                    if last_poll_time[dev_key]:
-                        elapsed_h = (now - last_poll_time[dev_key]) / 3600
-                        wh_delta  = status["watts"] * elapsed_h
-
-                    last_poll_time[dev_key] = now
-
-                    try:
-                        aws_iot_publisher.publish(dev_key, status, wh_delta)
-                        publish_local_mqtt(dev_key, status["watts"])
-                        db.insert_energy(
-                            device_id=tuya_local.DEVICES[dev_key]["id"],
-                            device_name=status["device_name"],
-                            watts=status["watts"],
-                            wh_delta=wh_delta,
-                            voltage=status["voltage"],
-                            current_ma=status["current_ma"],
-                        )
-                        db.aggregate_daily(tuya_local.DEVICES[dev_key]["id"])
-                    except Exception as e:
-                        print(f"[db] insert error ({dev_key}): {e}")
-                else:
-                    state.plug_state[dev_key]["ok"] = False
-
+                    state.plug_state[dev_key]['status'] = status
+                    state.plug_state[dev_key]['history'].append({
+                        't': datetime.now().strftime('%H:%M:%S'), 'w': status['watts']})
+            if status:
+                previous = last_poll_time[dev_key]
+                wh_delta = status['watts'] * (now-previous)/3600 if previous is not None else 0.0
+                last_poll_time[dev_key] = now
+                persist_reading(dev_key, status, wh_delta)
         time.sleep(state.PLUG_POLL_INTERVAL)
 
 
-# ── Energy cache loop (daemon thread) ─────────────────────────────────────────
+def refresh_device_energy(dev_key):
+    """Publish today's cache before optional monthly summary maintenance."""
+    device_id = tuya_local.DEVICES[dev_key]['id']
+    summary = db.get_today_summary(device_id)
+    with state.energy_cache_lock:
+        state.energy_cache[dev_key].update(summary)
+    month_kwh = db.get_current_month_usage(device_id)
+    with state.energy_cache_lock:
+        state.energy_cache[dev_key]['month_kwh'] = month_kwh
+    db.aggregate_monthly(device_id)
+
+
 def energy_cache_loop():
-    """Poll DB summaries every 10s and cache for UI timers."""
     while True:
-        for dev_key in ("plug", "server", "extension"):
+        for dev_key in tuya_local.DEVICES:
             try:
-                summary = db.get_today_summary(tuya_local.DEVICES[dev_key]["id"])
-                db.aggregate_monthly(tuya_local.DEVICES[dev_key]["id"])
-                monthly = db.get_monthly_history(tuya_local.DEVICES[dev_key]["id"], months=1)
-                month_kwh = float(monthly[0]["total_kwh"]) if monthly else summary["total_kwh"]
-                with state.energy_cache_lock:
-                    state.energy_cache[dev_key] = {**summary, "month_kwh": month_kwh}
-            except Exception as e:
-                print(f"[energy_cache] {dev_key}: {e}")
+                refresh_device_energy(dev_key)
+            except Exception as exc:
+                print(f"[energy_cache] {dev_key}: {exc}")
         time.sleep(10)
 
 
