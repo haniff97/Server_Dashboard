@@ -82,6 +82,31 @@ python3 -m unittest test_port_manager test_switch_response test_tnb_tariff -v
 
 ## Recent fixes (9 October 2026)
 
+### Live power works, but today's energy and cost stay zero
+
+The AWS publisher used `datetime.now(timezone.utc)` without importing `datetime`
+and `timezone`. With AWS enabled, this could raise before the local database
+insert because publishing and storage shared one error handler. Watts updated
+from the plug status even though energy readings were never stored.
+
+The imports are fixed. Local inserts now happen before optional publishing, and
+DB aggregation, AWS and MQTT have separate error handlers. Database/network I/O
+also runs outside the shared plug-state lock. Today's cache is updated before
+monthly-summary maintenance, so a monthly failure cannot discard today's totals.
+Current-month energy is read directly from raw records instead of using the latest
+stored month, which could be from an earlier month.
+
+Restart the dashboard after installing the fix. The first poll stores zero interval
+energy; subsequent successful polls accumulate Wh from watts and elapsed time.
+If totals remain zero, inspect dashboard logs for `[db] insert error` and
+`[energy_cache]` messages. Cloud errors use `[aws]` and cannot block local inserts.
+Also check the server clock/timezone and whether today's records exist in
+`plug_energy`. Live Orange Pi logs were not available during diagnosis, so the
+missing-import bug is confirmed in code but not confirmed as the deployed failure.
+Historical missing readings are not reconstructed by this fix.
+
+Regression checks: `python3 -m unittest test_energy_pipeline -v`.
+
 ### Switch response delay
 
 **Problem:** The switch handler waited for both the plug command and the database

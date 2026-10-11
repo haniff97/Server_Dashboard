@@ -75,6 +75,10 @@ def inventory():
     services = configured_services()
     states = {}
     errors = []
+    if not services:
+        errors.append('Start/Stop setup required: create port_services.json in the dashboard project, or set PORT_SERVICES_FILE to your service mapping file. Unmapped ports are read-only.')
+    if not os.getenv('PORT_CONTROL_TOKEN'):
+        errors.append('Start/Stop disabled: set PORT_CONTROL_TOKEN in the dashboard environment and restart the dashboard. Enter that same token below.')
     for service in services:
         try:
             states[service['id']] = service_running(service)

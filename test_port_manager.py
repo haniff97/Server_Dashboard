@@ -10,6 +10,15 @@ class PortManagerTests(unittest.TestCase):
         self.assertIn('[::]', sockets['TCP',1883]['addresses'])
         self.assertEqual(sockets['UDP',53]['owners'],set())
 
+    @patch.dict('os.environ', {'PORT_CONTROL_TOKEN':''})
+    @patch.object(pm,'configured_services',return_value=[])
+    @patch.object(pm,'command',return_value='tcp LISTEN 0 10 0.0.0.0:53 0.0.0.0:*')
+    def test_missing_setup_is_explained(self,*mocks):
+        rows, errors = pm.inventory()
+        self.assertFalse(rows[0]['controllable'])
+        self.assertTrue(any('port_services.json' in error for error in errors))
+        self.assertTrue(any('PORT_CONTROL_TOKEN' in error for error in errors))
+
     @patch.dict('os.environ', {'PORT_CONTROL_TOKEN':'test'})
     @patch.object(pm,'configured_services',return_value=[SERVICE])
     @patch.object(pm,'command',return_value='')
