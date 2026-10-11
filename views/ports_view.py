@@ -86,6 +86,7 @@ def render_ports_content():
                 status.set_text(f"{len({r['port'] for r in rows if r['bound']})} occupied ports · updated {datetime.now():%H:%M:%S}")
                 error_label.set_text(' · '.join(errors))
             except Exception as exc:
+                status.set_text('Host socket refresh failed')
                 error_label.set_text(f'Inventory unavailable: {exc}')
             finally:
                 refreshing = False

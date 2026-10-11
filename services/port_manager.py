@@ -21,7 +21,10 @@ def configured_services():
     path = os.getenv('PORT_SERVICES_FILE', str(Path(__file__).resolve().parents[1] / 'port_services.json'))
     if not Path(path).exists():
         return []
-    services = json.loads(Path(path).read_text())
+    try:
+        services = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f'Service configuration {path} is invalid JSON at line {exc.lineno}, column {exc.colno}. Use a JSON array as shown in port_services.example.json.') from exc
     if not isinstance(services, list):
         raise ValueError('Port services configuration must be a list')
     seen = set()
@@ -57,13 +60,28 @@ def parse_sockets(output):
     return groups
 
 
+def parse_pm2_processes(output):
+    """PM2 may prefix jlist JSON with daemon startup notices or ANSI colors."""
+    output = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', output)
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r'^\s*\[', output, re.MULTILINE):
+        start = output.find('[', match.start())
+        try:
+            processes, end = decoder.raw_decode(output[start:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(processes, list) and all(isinstance(item, dict) and isinstance(item.get('name'), str) for item in processes):
+            return processes
+    raise RuntimeError('PM2 jlist did not return a valid process list. Check PM2 under the dashboard operating-system user.')
+
+
 def service_running(service):
     target = service['target']
     if service['manager'] == 'systemd':
         return command(['systemctl', 'show', target, '--property=ActiveState', '--value']).strip() in ('active', 'activating')
     if service['manager'] == 'docker':
         return command(['docker', 'inspect', '--format', '{{.State.Running}}', target]).strip() == 'true'
-    processes = json.loads(command(['pm2', 'jlist']))
+    processes = parse_pm2_processes(command(['pm2', 'jlist']))
     match = next((p for p in processes if p['name'] == target), None)
     if match is None:
         raise RuntimeError('PM2 process not found')
@@ -72,9 +90,13 @@ def service_running(service):
 
 def inventory():
     sockets = parse_sockets(command(['ss', '-H', '-tulpn']))
-    services = configured_services()
-    states = {}
     errors = []
+    try:
+        services = configured_services()
+    except (ValueError, KeyError, TypeError, OSError) as exc:
+        services = []
+        errors.append(f'Service configuration unavailable: {exc}')
+    states = {}
     if not services:
         errors.append('Start/Stop setup required: create port_services.json in the dashboard project, or set PORT_SERVICES_FILE to your service mapping file. Unmapped ports are read-only.')
     if not os.getenv('PORT_CONTROL_TOKEN'):
@@ -82,7 +104,7 @@ def inventory():
     for service in services:
         try:
             states[service['id']] = service_running(service)
-        except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+        except (RuntimeError, ValueError, KeyError, TypeError, OSError, subprocess.TimeoutExpired) as exc:
             states[service['id']] = None
             errors.append(f"{service.get('name', service['id'])}: {exc}")
     keys = set(sockets)

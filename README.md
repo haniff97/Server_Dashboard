@@ -44,6 +44,17 @@ manual refresh. Status refreshes every 15 seconds. It monitors the machine runni
 Install the Linux `iproute2` package if `ss` is missing. Process names/PIDs are only
 shown when the dashboard user has permission to inspect them.
 
+### JSON parsing errors on the Ports page
+
+`Expecting value: line 2 column 1` means a JSON input was unreadable, not that
+socket discovery found no ports. Two inputs were parsed: `port_services.json`
+and PM2 `jlist` output. PM2 may print daemon startup notices before its JSON.
+The PM2 parser now accepts those notices and ANSI color prefixes. Invalid service
+configuration reports its filename and line/column. Neither malformed configuration
+nor an individual manager response now removes the live socket inventory; affected
+controls stay read-only and the page shows the specific error. Reload the deployed
+code and restart the dashboard to use this fix.
+
 ### Enable Start / Stop
 
 1. Copy `port_services.example.json` to `port_services.json` and edit it to match

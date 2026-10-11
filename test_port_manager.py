@@ -5,6 +5,29 @@ from services import port_manager as pm
 SERVICE = {'id':'mqtt','name':'MQTT','manager':'systemd','target':'mosquitto.service','ports':[{'protocol':'TCP','port':1883}]}
 
 class PortManagerTests(unittest.TestCase):
+    def test_pm2_startup_banner(self):
+        processes = pm.parse_pm2_processes('\n[PM2] Spawning daemon\n[PM2] Ready\n[{"name":"exporter","pm2_env":{"status":"online"}}]\n')
+        self.assertEqual(processes[0]['name'], 'exporter')
+        self.assertEqual(pm.parse_pm2_processes('[]'), [])
+        with self.assertRaises(RuntimeError): pm.parse_pm2_processes('[PM2] No JSON')
+
+    @patch.object(pm,'configured_services',side_effect=ValueError('Invalid JSON'))
+    @patch.object(pm,'command',return_value='tcp LISTEN 0 10 0.0.0.0:53 0.0.0.0:*')
+    def test_bad_configuration_keeps_live_ports(self,*mocks):
+        rows, errors = pm.inventory()
+        self.assertEqual(rows[0]['port'], 53)
+        self.assertFalse(rows[0]['controllable'])
+        self.assertTrue(any('Invalid JSON' in error for error in errors))
+
+    @patch.object(pm,'configured_services',return_value=[SERVICE])
+    @patch.object(pm,'service_running',side_effect=ValueError('Invalid manager response'))
+    @patch.object(pm,'command',return_value='tcp LISTEN 0 10 0.0.0.0:1883 0.0.0.0:*')
+    def test_bad_manager_response_keeps_live_ports(self,*mocks):
+        rows, errors = pm.inventory()
+        self.assertEqual(rows[0]['port'], 1883)
+        self.assertFalse(rows[0]['controllable'])
+        self.assertTrue(any('Invalid manager response' in error for error in errors))
+
     def test_parse_ipv6_and_missing_owner(self):
         sockets = pm.parse_sockets('tcp LISTEN 0 100 [::]:1883 [::]:* users:(("mosquitto",pid=2,fd=1))\nudp UNCONN 0 0 0.0.0.0:53 0.0.0.0:*')
         self.assertIn('[::]', sockets['TCP',1883]['addresses'])
